@@ -88,3 +88,5 @@ feature/llm-integration/LCPToolkit/storage/engine
 feature/llm-integration/LCPToolkit/storage/models
 feature/llm-integration/LCPToolkit/storage/system_manifest
 feature/llm-integration/LCPToolkit/storage/vector_db
+
+edacurry.cpython-38-darwin.so

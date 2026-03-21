@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -44,6 +45,7 @@ if missing_dep:
     try:
         _ROOT_DIR = Path(__file__).resolve().parent
         _missing_dependencies_path = Path(f"{_ROOT_DIR}/dependencies/")
+        os.makedirs(_missing_dependencies_path, exist_ok=True)
         with open(_missing_dependencies_path / "missing_dependencies.txt", "w") as file:
             for dep in missing_dep:
                 print(f"> {dep}")
