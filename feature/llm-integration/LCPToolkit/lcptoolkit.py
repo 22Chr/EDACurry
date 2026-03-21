@@ -21,6 +21,7 @@ print(f"\n{BLUE}{BOLD}Welcome to LCPToolkit, the tool that makes EDACurry intera
  # Check dependencies
 dep_list = [
             "huggingface_hub",
+            "psutil",
             "pydantic",
             "torch",
             "wmi",

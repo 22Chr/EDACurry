@@ -38,7 +38,7 @@ class HardwareManager(BaseModel):
         os = platform.system()
         if os is None:
             raise ValueError("Unrecognized Operating System")
-        if os != "Darwin" and os != "win32" and os != "linux":
+        if os != "Darwin" and os.lower() != "win32" and os.lower() != "linux":
             raise ValueError(f"Unsupported Operating System detected: {os}")
 
 
@@ -139,7 +139,7 @@ class HardwareManager(BaseModel):
                 gpu = gpus[0]
                 total_vram = gpu.get("VRAM (Total)")
                 # ok_available_vram_to_0 = True
-        elif os == "win32":
+        elif os.lower() == "win32":
             try:
                 import wmi
                 system_info = wmi.WMI()
