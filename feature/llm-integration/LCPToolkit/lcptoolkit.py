@@ -109,7 +109,11 @@ llm_model_path = core.get_models_path().get("chat_model")
 config = EngineConfig(model_path = llm_model_path, port = "8888")
 mode = "chat"
 inferenceEngine = InferenceEngine()
-inferenceEngine.start_server(mode, config)
+
+# Check the Chat server status and decide if proceed
+if not inferenceEngine.start_server(mode, config):
+    print("\nERROR: Unable to proceed. The Chat Server is required to run")
+    sys.exit(1)
 
 # Set a function that has to be executed every time LCPToolkit is closed (useful in case of crashes)
 atexit.register(inferenceEngine.stop_all_servers)
@@ -149,23 +153,38 @@ while True:
     else:
         print(result, "\n\n")
 
-        # If the user asks for a python script, automatically export the result as a .py script
+        # If the user asks for a Python script, automatically export the result as a .py script
+        filename = ""
         if "```python" in result and not "##example##" in result:
             # Extract filename provided by the LLM model
-            filename = result.split("##filename:")[1].strip()
+            _filename_starting_index = result.find("##filename")
+            _filename_ending_index = result.find(".py")
 
-            # Consider only the python code
-            result = result.replace("```python", "")
-            result.replace("```", "")
-            result = result.replace(f"##filename: {filename}", "")
+            if _filename_starting_index == -1 or _filename_ending_index == -1 or _filename_ending_index <= _filename_starting_index:
 
-            try:
-                storage_manager = StorageManager()
-                with open(storage_manager.get_output_scripts_path() / filename, "w") as file:
-                    file.write(result)
-                    file.close()
-                    print(f"{YELLOW}{storage_manager.get_output_scripts_path() / filename} has been automatically created.{RESET}\n\n")
-            except FileNotFoundError as e:
-                print(f"ERROR: An error occurred while trying to save the the response to {filename}: {e}")
-                inferenceEngine.stop_all_servers()
-                sys.exit(1)
+                print("ERROR: Unable to extract a proper filename for the generated script")
+
+            else:
+
+                filename = result[_filename_starting_index:(_filename_ending_index + 3)]
+                filename = filename.replace("##filename: ", "")
+
+                # Consider only the Python code
+                _useless_str_index = result.find("```python")
+                if _useless_str_index != -1:
+                    result = result.replace(result[0:_useless_str_index], "")
+
+                result = result.replace("```python", "")
+                _filename_index_in_result = result.find("##filename: " + filename)
+                result = result.replace(result[_filename_index_in_result:], "")
+                result = result.replace("```", "")
+
+                try:
+                    storage_manager = StorageManager()
+                    with open(storage_manager.get_output_scripts_path() / filename, "w") as file:
+                        file.write(result)
+                        file.close()
+                        print(f"{YELLOW}{storage_manager.get_output_scripts_path() / filename} has been automatically created.{RESET}\n\n")
+                except FileNotFoundError as e:
+                    print(f"ERROR: An error occurred while trying to save the the response to {filename}: {e}")
+

@@ -2,7 +2,7 @@ import re
 import sys
 import requests
 from huggingface_hub import hf_hub_download, snapshot_download
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel
 from .storage_manager import StorageManager
 
 

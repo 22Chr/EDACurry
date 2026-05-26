@@ -59,7 +59,7 @@ class CoreSystem():
 
         # Check data integrity
         if _sys_info is None:
-            raise ValueError("An error has occured while retrieving system information.\n")
+            raise ValueError("An error has occurred while retrieving system information.\n")
 
 
         print("Checking system requirements...")
