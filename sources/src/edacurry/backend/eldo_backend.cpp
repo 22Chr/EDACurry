@@ -46,11 +46,15 @@ int EldoBackend::visitCircuit(const std::shared_ptr<structure::Circuit> &e)
 
 int EldoBackend::visitAnalysis(const std::shared_ptr<structure::Analysis> &e)
 {
-    if ((e->getName() == "ac_parameter_driven") || (e->getName() == "ac_data_driven") || (e->getName() == "ac_list_driven") || (e->getName() == "ac_adaptive")) {
-        ss << ".ac";
-    } else if ((e->getName() == "tran_point_driven") || (e->getName() == "tran_parameterized") || (e->getName() == "tran_data_driven")) {
-        ss << ".tran";
-    }
+    // The frontend names an analysis after the directive it came from, followed by
+    // an underscore and the variant it matched: `ac_parameter_driven` came from
+    // `.ac`, `dc_temperature_analysis` from `.dc`. So everything up to the first
+    // underscore is the directive, and a name without one is the directive itself.
+    // Listing the variants by hand covered `.ac` and `.tran` only, which silently
+    // dropped the directive of the other thirty-three analyses and emitted a line
+    // that no simulator can read.
+    const std::string &name = e->getName();
+    ss << '.' << name.substr(0, name.find('_'));
     for (const auto &parameter : e->parameters) {
         ss << ' ';
         parameter->accept(this);

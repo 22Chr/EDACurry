@@ -172,6 +172,10 @@ double siprefix_to_scaling_factor(SiPrefix e);
 /// @brief Return the scaling factor of the given type of SI unit expressed as a letter (e.g. 'k' returns 1e03).
 /// @param e the SI unit letter.
 /// @return The scaling factor of given type of SI unit letter.
+/// @warning This is the strict SI mapping, so it is case-sensitive and 'M' is mega
+/// while 'm' is milli. Do not use it to parse netlist literals: SPICE dialects are
+/// case-insensitive and read both as milli, spell mega as `meg`, and have no peta,
+/// exa or atto. Each frontend implements the scale factors of its own dialect.
 double letter_to_scaling_factor(char l);
 
 /// @brief The type of paramters.

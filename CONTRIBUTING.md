@@ -137,8 +137,16 @@ already shows *what* changed. Reference issues and pull requests by number
 
 ### Tests
 
-The scripts in `sources/test/` each take one or more netlists or directories as
-arguments:
+`test_eldo_units.py` is the one script that behaves like a test suite: it needs
+no arguments, generates the netlists it parses, asserts specific results, and
+exits non-zero when a case fails. Run it after any change to the Eldo frontend.
+
+```bash
+cd sources/test
+PYTHONPATH=../build python3 test_eldo_units.py
+```
+
+The other scripts take one or more netlists or directories as arguments:
 
 ```bash
 cd sources/test

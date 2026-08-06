@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <memory>
 #include <iomanip>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 
 namespace edacurry::utility
 {
@@ -22,6 +25,24 @@ namespace edacurry::utility
 inline bool file_exists(std::string const &path)
 {
     return (access(path.c_str(), F_OK) != -1);
+}
+
+/// @brief Reads the file at the given path, dropping any carriage return.
+/// @param path the path to the file.
+/// @return The content of the file with LF line endings.
+/// @details A netlist written on Windows separates its lines with CRLF. The lexers
+/// have no rule for a carriage return, so they report a syntax error on the first
+/// line of such a file and the parse then fails for reasons that have nothing to do
+/// with the netlist. Normalising while reading costs one pass and makes those files
+/// behave like any other.
+inline std::string read_file_without_cr(std::string const &path)
+{
+    std::ifstream stream(path);
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    std::string content = buffer.str();
+    content.erase(std::remove(content.begin(), content.end(), '\r'), content.end());
+    return content;
 }
 
 /// @brief Checks if the path points to a file.

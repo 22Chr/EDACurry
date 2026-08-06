@@ -953,13 +953,12 @@ antlrcpp::Any SPECTREFrontend::advance_visit(antlr4::ParserRuleContext *ctx, con
 
 std::shared_ptr<edacurry::structure::Object> parse_spectre(const std::string &path)
 {    
-    std::cerr << "Starting parse_spectre for " << path << std::endl;
-    std::ifstream fileStream(path);
-    if (!fileStream.is_open()) {
+    if (!utility::file_exists(path)) {
         std::cerr << "ERROR: Cannot open file " << path << std::endl;
         return nullptr;
     }
-    antlr4::ANTLRInputStream input(fileStream);
+    std::string content = utility::read_file_without_cr(path);
+    antlr4::ANTLRInputStream input(content);
     edacurry::SPECTRELexer lexer(&input);
     antlr4::CommonTokenStream tokens(&lexer);
     tokens.fill();
