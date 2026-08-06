@@ -10,12 +10,13 @@ sources/test/eldo/amsnet_1.0
 sources/test/eldo/analog_benchmark2017_v2.2
 sources/test/eldo/analog.com
 sources/test/eldo/nuovi_circuiti
+sources/test/eldo/spice-models-main
 
 # Test results
 sources/test/eldo_result
 sources/test/spectre_result
 
-# New test
+# Add-on
 ieee2427
 
 # Archives
@@ -24,6 +25,7 @@ ieee2427
 # IDEs
 .vscode
 .idea
+.claude
 
 # Graphviz
 *.dot
