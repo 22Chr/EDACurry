@@ -276,7 +276,7 @@ add_custom_target(
     stubs
     COMMAND ${CMAKE_COMMAND} -E echo "Generating python stubs..."
     COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${stubgen_SOURCE_DIR}
-            ${Python_EXECUTABLE} -c "import pybind11_stubgen\; pybind11_stubgen.main()" ${PROJECT_NAME}
+            ${Python_EXECUTABLE} -m pybind11_stubgen ${PROJECT_NAME}
     COMMAND ${CMAKE_COMMAND} -E echo "Generating python stubs... done!"
     DEPENDS ${PROJECT_NAME}
     WORKING_DIRECTORY $<TARGET_FILE_DIR:${PROJECT_NAME}>
