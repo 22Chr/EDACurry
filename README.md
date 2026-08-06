@@ -11,6 +11,8 @@ space exploration, defect model injection, and subcircuit wrapping, all accessib
     .
     ├── grammar/                # Spectre and Eldo grammar.
     ├── sources/                # Netlist manipulator (includes C++ parser).
+    ├── tools/                  # Auxiliary tooling built on top of EDACurry.
+    ├── CONTRIBUTING.md         # How to build the project and propose changes.
     ├── LICENSE                       
     └── README.md
  
