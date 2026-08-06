@@ -1,0 +1,589 @@
+# Prompt for circuit manipulation
+# This is a prompt for a circuit manipulation program. The program should be able to parse and manipulate circuit definitions, including components, nodes, parameters, and values. The program should also support various operations such as creating subcircuits, including libraries, and defining models.
+# Description:
+Follows the classes and their relationships in the provided code. Here is how to read the relationships:
+- Classes are defined between square brackets (e.g., [Object]).
+- Hereditary relationships are indicated on the right-hand side of the class between parentesis (e.g., [Object] (Visitable)).
+- The attributes of each class are listed using the char - below the class name, with their types indicated (e.g., - name : type).
+- The functions of each class are listed using the char * below the class name, with their types indicated (e.g., * name(attributes) : return).
+
+
+## Classes and their relationships
+
+[Object] (Visitable)
+- parent : Object*
+* toString() : String
+
+[Node] (Object)
+- name : String
+* toString() : String
+
+[Analysis] (Object)
+- name : String
+- parameters : List<Parameter>
+* toString() : String
+
+[Parameter] (Object)
+- left : Value
+- right : Value
+- type : ParameterType
+- hide_name : bool
+* getLeft() : std::shared_ptr<structure::Value>
+* setLeft(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* getRight() : std::shared_ptr<structure::Value>
+* setRight(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* toString() : String
+
+[Component] (Object)
+- name : String
+- master : String
+- nodes : List<Node>
+- parameters : List<Parameter>
+* setMaster(master : const std::string &) : void
+* getMaster() : String
+* matchMaster(master : const std::string &) : bool
+* toString() : String
+
+[Subckt] (Object)
+- name : String
+- content : List<Object>
+- nodes : List<Node>
+- parameters : List<Parameter>
+* toString() : String
+
+[Library] (Object)
+- name : String
+- path : String
+* toString() : String
+
+[Value] (Object)
+* toString() : String
+[Control] (Object)
+- name : String
+- type : ControlType
+- parameters : List<Parameter>
+* toString() : String
+
+[ControlScope] (Control)
+- content : List<Object>
+- nodes : List<Node>
+* toString() : String
+
+[LibraryDef] (Object)
+- name : String
+- content : List<Object>
+* toString() : String
+
+[Include] (Object)
+- type : IncludeType
+- path : String
+- parameters : List<Parameter>
+* getIncludeType() : IncludeType
+* setIncludeType(include_type : IncludeType) : void
+* setPath(path : const std::string &) : void
+* getPath() : String
+* toString() : String
+
+[Model] (Object)
+- name : String
+- library : String
+- libraryType : String
+- master : String
+- parameters : List<Parameter>
+* toString() : String
+
+[Circuit] (Object)
+- name : String
+- title : String
+- content : List<Object>
+- nodes : List<Node>
+- parameters : List<Parameter>
+* toString() : String
+
+[Identifier] (Value)
+- name : String
+* toString() : String
+
+[Expression] (Value)
+- first : Value
+- second : Value
+- op : Operator
+* getOperator() : Operator
+* setOperator(op : Operator) : void
+* getFirst() : std::shared_ptr<structure::Value>
+* setFirst(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* getSecond() : std::shared_ptr<structure::Value>
+* setSecond(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* toString() : String
+
+[ExpressionUnary] (Value)
+- operator : Operator
+- value : Value
+* getOperator() : Operator
+* setOperator(op : Operator) : void
+* getValue() : std::shared_ptr<structure::Value>
+* setValue(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* toString() : String
+
+[Function Call] (Value)
+- name : String
+- parameters : List<Parameter>
+* toString() : String
+
+[Value String] (Value)
+- string : String
+* toString() : String
+
+[Value List] (Value)
+- values : List<Value>
+- delimiter : DelimiterType
+* getDelimiterType() : DelimiterType
+* setDelimiterType(delimiter : DelimiterType) : void
+* toString() : String
+
+[Value Pair] (Value)
+- first : Value
+- second : Value
+* getFirst() : std::shared_ptr<structure::Value>
+* setFirst(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* getSecond() : std::shared_ptr<structure::Value>
+* setSecond(value : const std::shared_ptr<structure::Value> &) : std::shared_ptr<structure::Value>
+* toString() : String
+
+[Number] (Value)
+- value : T
+- unit : String
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+# EDACurry Library Documentation
+
+The following lines provides a comprehensive overview of the `edacurry` Python library, which is designed for parsing, manipulating, and generating circuit netlists. It details the library's core concepts, class hierarchy, attributes, methods, module-level functions, and enums.
+
+---
+
+## Core Concepts
+
+The `edacurry` library represents circuit definitions as an Abstract Syntax Tree (AST). Each element of a netlist—such as components, subcircuits, nodes, parameters, and various types of values—is an Object within this tree. This hierarchical structure allows for powerful and flexible manipulation of circuit data. The Visitor design pattern is utilized, enabling distinct operations (like printing or analysis) to be performed on the AST without modifying the core structure classes.
+
+---
+
+## Module-Level Functions
+
+These functions provide the primary interface for interacting with the `edacurry` library, handling parsing from various netlist formats, writing to them, and searching within the Abstract Syntax Tree.
+
+* parse_eldo(filepath : str) : Circuit
+* parse_spectre(filepath : str) : Circuit
+* parse_json(filepath : str) : Circuit
+* parse_xml(filepath : str) : Circuit
+
+* write_eldo(circuit : Circuit) : str
+* write_json(circuit : Circuit) : str
+* write_xml(circuit : Circuit) : str
+
+* find_component(circuit : Object, name : str) : Component
+* find_subckt(circuit : Object, name : str) : Subckt
+* find_parameter(obj : Object, name : str) : Parameter
+* find_components_by_master(scope : Object, master_name : str) : List<Component>
+
+---
+
+## Enums
+
+The `edacurry` library defines several enumerations to categorize different types of netlist elements, operators, delimiters, and SI prefixes.
+
+NetlistType
+- net_none: No netlist type.
+- net_spice: A SPICE netlist.
+- net_spectre: A Spectre netlist.
+- net_eldo: An ELDO netlist.
+
+IncludeType
+- inc_none: No include type.
+- inc_standard: Standard include.
+- inc_hdl: Include a Hardware Description Language (HDL).
+- inc_ahdl: Include an Analog Hardware Description Language (AHDL).
+- inc_cpp: Include a C or C++ code.
+
+Operator
+- op_none: No operator type.
+- op_assign: Assign operator (=).
+- op_plus: Operator +.
+- op_minus: Operator -.
+- op_mult: Operator *.
+- op_div: Operator /.
+- op_or: Logical OR operator (||).
+- op_and: Logical AND operator (&&).
+- op_xor: Bitwise XOR operator (^).
+- op_not: Logical NOT operator (!).
+- op_bor: Bitwise OR operator (|).
+- op_band: Bitwise AND operator (&).
+- op_bsl: Bitwise left shift operator (<<).
+- op_bsr: Bitwise right shift operator (>>).
+- op_eq: Equality operator (==).
+- op_neq: Inequality operator (!=).
+- op_lt: Less than operator (<).
+- op_gt: Greater than operator (>).
+- op_le: Less than or equal to operator (<=).
+- op_ge: Greater than or equal to operator (>=).
+- op_mod: Modulo operator (%).
+- op_pow: Power operator (^).
+
+DelimiterType
+- dlm_none: No delimiter type.
+- dlm_round: Round brackets ( ).
+- dlm_square: Square brackets [ ].
+- dlm_curly: Curly brackets { }.
+- dlm_apex: Single quotes ' '.
+- dlm_quotes: Double quotes " ".
+
+SiPrefix
+- si_yotta: Y (10^24)
+- si_zetta: Z (10^21)
+- si_exa: E (10^18)
+- si_peta: P (10^15)
+- si_tera: T (10^12)
+- si_giga: G (10^9)
+- si_mega: M (10^6)
+- si_chilo: k (10^3)
+- si_none: - (1)
+- si_milli: m (10^-3)
+- si_micro: u (10^-6)
+- si_nano: n (10^-9)
+- si_pico: p (10^-12)
+- si_femto: f (10^-15)
+- si_atto: a (10^-18)
+- si_zepto: z (10^-21)
+- si_yocto: y (10^-24)
+
+ParameterType
+- param_none
+- param_assign
+- param_tabular
+- param_list
+- param_arithmetic
+- param_no_equal
+
+ControlType
+- ctrl_none: No control statement.
+- ctrl_alter: A single alter statement.
+- ctrl_altergroup: A group of alter statements.
+- ctrl_save: Save statement.
+- ctrl_option: Set compiler options.
+- ctrl_nodeset: DC Analysis Conditions.
+- ctrl_defmac: Macro Definition.
+- ctrl_chrent: Piecewise Linear Source.
+- ctrl_print: Print contents of a tabular listing.
+- ctrl_plot: Plotting of Simulation Results.
+- ctrl_probe
+- ctrl_temp
+- ctrl_meas
+
+---
+
+## Classes and Their Relationships
+
+### Core Classes
+
+[AbstractVisitor]
+* __init__() : None
+
+[NamedObject]
+- name : String
+* __init__(name : const std::string = std::string()) : None
+* matchName(name : const std::string &) : bool
+
+[Object]
+- parent : Object
+* __init__(parent : Object = nullptr) : None
+* accept(visitor : Visitor) : None
+
+### Value Classes
+
+[Value] (Object)
+* __init__() : None
+* __str__() : String
+* __repr__() : String
+
+[String] (Value)
+- string : String
+* __init__(string : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Identifier] (Value, NamedObject)
+* __init__(name : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Unsigned] (Value)
+- value : unsigned
+- unit : String
+* __init__(value : unsigned = 0u, unit : std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Int] (Value)
+- value : int
+- unit : String
+* __init__(value : int = 0, unit : std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Double] (Value)
+- value : double
+- unit : String
+* __init__(value : double = .0, unit : std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[ValuePair] (Value)
+- first : Value
+- second : Value
+* __init__(first : Value = nullptr, second : Value = nullptr) : None
+* __str__() : String
+* __repr__() : String
+
+[ValueList] (Value)
+- values : List<Value>
+- delimiter : DelimiterType
+* __init__(delimiter : DelimiterType = dlm_none) : None
+* __str__() : String
+* __repr__() : String
+
+[Expression] (Value)
+- operator : Operator
+- first : Value
+- second : Value
+* __init__(op : Operator = op_none, first : Value = nullptr, second : Value = nullptr) : None
+* __str__() : String
+* __repr__() : String
+
+[ExpressionUnary] (Value)
+- operator : Operator
+- value : Value
+* __init__(op : Operator = op_none, value : Value = nullptr) : None
+* __str__() : String
+* __repr__() : String
+
+[FunctionCall] (Value, NamedObject)
+- parameters : List<Parameter>
+* __init__(name : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+### Circuit Structure Classes
+
+[Node] (Object, NamedObject)
+* __init__(name : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Parameter] (Object)
+- left : Value
+- right : Value
+- type : ParameterType
+- hide_name : bool
+* __init__(left : Value = nullptr, right : Value = nullptr, type : ParameterType = param_assign, hide_name : bool = false) : None
+* __str__() : String
+* __repr__() : String
+
+[Component] (Object, NamedObject)
+- nodes : List<Node>
+- parameters : List<Parameter>
+- master : String
+* __init__(name : const std::string = std::string(), master : const std::string = std::string()) : None
+* matchMaster(master : const std::string &) : bool
+* __str__() : String
+* __repr__() : String
+
+[Model] (Object, NamedObject)
+- parameters : List<Parameter>
+- master : String
+- library : String
+- library_type : String
+* __init__(name : const std::string &, master : const std::string &, library : const std::string &, library_type : const std::string &) : None
+* matchMaster(master : const std::string &) : bool
+* __str__() : String
+* __repr__() : String
+
+[Include] (Object)
+- parameters : List<Parameter>
+- include_type : IncludeType
+- path : String
+* __init__(include_type : IncludeType = inc_none, path : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Library] (Object, NamedObject)
+- path : String
+* __init__(name : const std::string = std::string(), path : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[LibraryDef] (Object, NamedObject)
+- content : List<Object>
+* __init__(name : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Control] (Object, NamedObject)
+- parameters : List<Parameter>
+- control_type : ControlType
+* __init__(name : const std::string = std::string(), type : ControlType = ctrl_none) : None
+* __str__() : String
+* __repr__() : String
+
+[ControlScope] (Control)
+- nodes : List<Node>
+- content : List<Object>
+* __init__(name : const std::string = std::string(), type : ControlType = ctrl_none) : None
+* __str__() : String
+* __repr__() : String
+
+[Analysis] (Object, NamedObject)
+- parameters : List<Parameter>
+* __init__(name : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Subckt] (Object, NamedObject)
+- nodes : List<Node>
+- parameters : List<Parameter>
+- content : List<Object>
+* __init__(name : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+[Circuit] (Object, NamedObject)
+- nodes : List<Node>
+- parameters : List<Parameter>
+- content : List<Object>
+- title : String
+* __init__(name : const std::string = std::string(), title : const std::string = std::string()) : None
+* __str__() : String
+* __repr__() : String
+
+### Visitor Class
+
+[Visitor] (AbstractVisitor)
+* __init__() : None
+* visitCircuit(circuit : Circuit) : None
+* visitAnalysis(analysis : Analysis) : None
+* visitComponent(component : Component) : None
+* visitControlScope(control_scope : ControlScope) : None
+* visitControl(control : Control) : None
+* visitExpressionUnary(expression_unary : ExpressionUnary) : None
+* visitExpression(expression : Expression) : None
+* visitFunctionCall(function_call : FunctionCall) : None
+* visitIdentifier(identifier : Identifier) : None
+* visitInclude(include : Include) : None
+* visitLibraryDef(library_def : LibraryDef) : None
+* visitLibrary(library : Library) : None
+* visitModel(model : Model) : None
+* visitNode(node : Node) : None
+* visitUnsigned(unsigned_num : Unsigned) : None
+* visitInt(int_num : Int) : None
+* visitDouble(double_num : Double) : None
+* visitParameter(parameter : Parameter) : None
+* visitSubckt(subckt : Subckt) : None
+* visitString(string_val : String) : None
+* visitValuePair(value_pair : ValuePair) : None
+* visitValueList(value_list : ValueList) : None
+
+-------------------------------------------------------------------------------------------------------------------------------------------
+
+
+# Some example code snippets
+# Example 1: Updating the M parameter of component xd1 via AST manipulation
+// Step 1: Search the component by name
+component = edacurry.find_component(root, "xd1")
+// Step 2: Search the parameter by name
+parameter = edacurry.find_parameter(component, "M")
+// Step 3: Change the parameter value
+parameter.right = edacurry.Double(2.45)
+
+# Example 2: Wrapping an existing subcircuit (OPAMP1) into a new subcircuit for hierarchical reuse or probing.
+// Step 1: Find and rename OPAMP1 to OPAMP1_WP
+original = edacurry.find_subckt(root, "OPAMP1")
+original.name = "OPAMP1_WP"
+// Step 2: Create wrapper subckt OPAMP1 with same ports
+wrapper = edacurry.Subckt("OPAMP1")
+for node in original.nodes:
+    wrapper.nodes.append(edacurry.Node(node.name))
+// Step 3: Create a component that instantiates OPAMP1_WP
+xopamp = edacurry.Component("XOP1", ("OPAMP1_WP"))
+for node in original.nodes :
+    xopamp.nodes.append(edacurry.Node(node.name))
+wrapper.content.append(xopamp)
+// Step 4: Add the wrapper back to the root
+root.content.append(wrapper)
+
+# Example 3: Changing the master of a component to redirect its instantiation.
+// Step 1: Find the component X1
+original = edacurry.find_component(root, "X1")
+// Step 2: Change the master to a new one.
+original.master = "OPAMP2_NEW"
+
+# Example 4: Updating the W parameter of all nmos1 components.
+import numpy as np , edacurry , os
+// If the output directory does not exist , create it
+if not os.path.exists("eldo_result"):
+    os.mkdir("eldo_result")
+// Parse the ELDO file
+root = edacurry.parse_eldo("eldo/circ_base/opamp.cir")
+// Sweep width parameters from 1 um to 5 um , 5 points
+width_values = np.linspace(1.0, 5.0, 5)
+// Find the subcircuit "OPAMP1"
+subckt = edacurry.find_subckt(root, "OPAMP1")
+// Find all NMOS components inside the subcircuit .
+comps = edacurry.find_components_by_master(subckt, "nmos1")
+// For each width value ...
+for width in width_values:
+    // Update each NMOS width
+    for nmos in comps:
+        // Find the parameter "W"
+        w_param = edacurry.find_parameter(nmos, "W")
+        // Update the parameter value.
+        w_param.right = edacurry.Double(width)
+    // Output each variant netlist.
+    filename = f"eldo_result/variant_w_{width:.1f}.cir"
+    with open(filename, "w") as f:
+            f.write(edacurry.write_eldo(root))
+
+# Example 5: Replacing all NMOS transistors with low-Vth variants to simulate technology options.
+import numpy as np, edacurry, os
+// Parse the ELDO file
+root = edacurry.parse_eldo("eldo/circ_base/opamp.cir")
+// Traverse the AST and find all NMOS components based on
+// master name pattern
+nmos = edacurry.find_components_by_master(root, "nmos1")
+// For each NMOS transistor found ...
+for component in nmos:
+    // Replace its master model with a low - Vth version
+    component.master = "nmos_low_vth"
+// Output the new netlist ...
+
+# Example 6: Assigning randomized VTH values to NMOS transistors using a Gaussian distribution for Monte Carlo analysis.
+import numpy as np, edacurry, os
+// Parse the ELDO file
+root = edacurry.parse_eldo("eldo/circ_base/opamp.cir")
+// Settings for the Monte Carlo simulation parameters
+num_samples = 10 // Number of samples
+vth_mean = 0.4 // Mean threshold voltage
+vth_sigma = 0.02 // Standard deviation
+// Generate random vth values for each sample
+vth_samples = np.random.normal(
+    loc=vth_mean, scale=vth_sigma, size=num_samples)
+// Get all NMOS devices.
+devs = edacurry.find_components_by_master(root, "nmos1")
+for idx, vth_value in enumerate(vth_samples):
+    // Update VTH parameter for each NMOS
+    for nmos in devs:
+        vth_param = edacurry.find_parameter(nmos, "VTH")
+        vth_param.right = edacurry.Double(vth_value)
+    // Output the Monte Carlo variant netlist ...
+
+
+-------------------------------------------------------------------------------------------
