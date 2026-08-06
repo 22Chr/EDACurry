@@ -15,6 +15,9 @@ sources/test/eldo/nuovi_circuiti
 sources/test/eldo_result
 sources/test/spectre_result
 
+# New test
+ieee2427
+
 # Archives
 *.tar.gz
 

@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 
 # Set the minimum CMake version, the project name and default build type.
-cmake_minimum_required(VERSION 3.1...3.18)
+cmake_minimum_required(VERSION 3.15...3.18)
 
 # Set the project name.
 project(edacurry CXX)
@@ -62,7 +62,7 @@ find_package(Doxygen)
 # Retrieve the pybind11.
 FetchContent_Declare(pybind11
     GIT_REPOSITORY "https://github.com/pybind/pybind11.git"
-    GIT_TAG 0630807c3070287c716f6be3eacb00b8816b4215 # v2.11.1
+    GIT_TAG a2e59f0e7065404b44dfe92a28aca47ba1378dc4 # v2.13.6
 )
 # Retrieve the properties related to the content.
 FetchContent_MakeAvailable(pybind11)
@@ -274,15 +274,13 @@ endif()
 
 add_custom_target(
     stubs
-    DEPENDS ${STUBGEN}
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating python stubs..."
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${stubgen_SOURCE_DIR}
+            ${Python_EXECUTABLE} -c "import pybind11_stubgen\; pybind11_stubgen.main()" ${PROJECT_NAME}
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating python stubs... done!"
     DEPENDS ${PROJECT_NAME}
-)
-add_custom_command(
-    TARGET stubs
-    COMMAND echo "Generating python stubs..."
-    COMMAND PYTHONPATH=${stubgen_SOURCE_DIR} ${Python_EXECUTABLE} -c \"import pybind11_stubgen \; pybind11_stubgen.main() \;\" ${PROJECT_NAME}
-    COMMAND echo "Generating python stubs... done!"
-    DEPENDS ${PROJECT_NAME}
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    VERBATIM
 )
 
 # -----------------------------------------------------------------------------

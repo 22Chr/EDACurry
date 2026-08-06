@@ -88,7 +88,10 @@ void initialize()
 		return;
 	}
 
-	if ((logger = PyEval_CallObject(getLogger, Py_BuildValue("(s)", "edacurry_logger"))) == nullptr) {
+	PyObject* logger_args = Py_BuildValue("(s)", "edacurry_logger");
+	logger                = PyObject_CallObject(getLogger, logger_args);
+	Py_XDECREF(logger_args);
+	if (logger == nullptr) {
 		PyErr_SetString(PyExc_TypeError, "Cannot create the logger for C++.");
 		return;
 	}
@@ -132,7 +135,18 @@ std::string get_simple_time()
 
 bool is_enabled(LogLevel level)
 {
-	return PyObject_IsTrue(PyEval_CallObject(isEnabledFor, Py_BuildValue("(i)", level)));
+	PyObject* args   = Py_BuildValue("(i)", level);
+	PyObject* result = PyObject_CallObject(isEnabledFor, args);
+	Py_XDECREF(args);
+	if (result == nullptr) {
+		// Do not leave a pending exception behind: this function has no error
+		// channel, so it would surface at an unrelated Python boundary.
+		PyErr_Clear();
+		return false;
+	}
+	bool enabled = (PyObject_IsTrue(result) == 1);
+	Py_DECREF(result);
+	return enabled;
 }
 
 void print(char const* file, char const* func, int line, LogLevel level, char const* format, ...)
@@ -197,7 +211,12 @@ void print(char const* file, char const* func, int line, LogLevel level, char co
 	ss << buffer;
 #endif
 
-	PyEval_CallObject(log_fun, Py_BuildValue("(s)", ss.str().c_str()));
+	if (log_fun != nullptr) {
+		PyObject* args   = Py_BuildValue("(s)", ss.str().c_str());
+		PyObject* result = PyObject_CallObject(log_fun, args);
+		Py_XDECREF(args);
+		Py_XDECREF(result);
+	}
 
 	if ((level == LogLevel::ERROR) || (level == LogLevel::CRITICAL)) {
 		throw std::runtime_error("Error encountered!");
