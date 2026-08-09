@@ -121,6 +121,46 @@ mark_as_advanced(FORCE
 )
 
 # =====================================
+# ANTLR4 RUNTIME (macOS only)
+# =====================================
+if(APPLE)
+    # 1. Douwnload Antlr4 source code
+    FetchContent_Declare(
+            antlr4_cpp_runtime
+            GIT_REPOSITORY https://github.com/antlr/antlr4.git
+            GIT_TAG        4.9
+            GIT_SUBMODULES ""
+    )
+
+    # Ignore warnings
+    if(POLICY CMP0169)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
+    FetchContent_GetProperties(antlr4_cpp_runtime)
+    if(NOT antlr4_cpp_runtime_POPULATED)
+        FetchContent_Populate(antlr4_cpp_runtime)
+    endif()
+
+    # 2. Retrieve .cpp runtime files
+    file(GLOB_RECURSE ANTLR4_SRC_FILES
+            "${antlr4_cpp_runtime_SOURCE_DIR}/runtime/Cpp/runtime/src/*.cpp"
+    )
+
+    # 3. Compile
+    add_library(antlr4_static STATIC ${ANTLR4_SRC_FILES})
+    target_compile_definitions(antlr4_static PUBLIC ANTLR4CPP_STATIC)
+    target_include_directories(antlr4_static PUBLIC
+            "${antlr4_cpp_runtime_SOURCE_DIR}/runtime/Cpp/runtime/src"
+    )
+
+    # 4. Set variables
+    set(ANTLR4_INCLUDE_DIRS "${antlr4_cpp_runtime_SOURCE_DIR}/runtime/Cpp/runtime/src")
+    set(ANTLR4_STATIC_LIB antlr4_static)
+endif()
+
+
+# =====================================
 # DOXYGENAWESOME
 # =====================================
 if(DOXYGEN_FOUND)
@@ -214,12 +254,25 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE PYTHON_INTERFACE_ENABLED)
 #    BUILD_WITH_INSTALL_RPATH TRUE
 #)
 
-# --- Use local statically compiled ANTLR4 library and headers ---
-set(ANTLR4_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/libraries/include")
-set(ANTLR4_STATIC_LIB "${PROJECT_SOURCE_DIR}/libraries/libantlr4-runtime.a")
+# --- Use local statically compiled ANTLR4 library and headers under Linux systems. Retrieve thre proper macOS version otherwise ---
+#set(ANTLR4_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/libraries/include")
+#set(ANTLR4_STATIC_LIB "${PROJECT_SOURCE_DIR}/libraries/libantlr4-runtime.a")
+
+#target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${ANTLR4_INCLUDE_DIRS})
+#target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/libraries/include/antlr4-runtime)
+
+if(APPLE)
+    set(ANTLR4_INCLUDE_DIRS "${antlr4_cpp_runtime_SOURCE_DIR}/runtime/Cpp/runtime/src")
+    set(ANTLR4_STATIC_LIB antlr4_static)
+else()
+    set(ANTLR4_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/libraries/include")
+    set(ANTLR4_STATIC_LIB "${PROJECT_SOURCE_DIR}/libraries/libantlr4-runtime.a")
+endif()
 
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${ANTLR4_INCLUDE_DIRS})
-target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/libraries/include/antlr4-runtime)
+if(NOT APPLE)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/libraries/include/antlr4-runtime)
+endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${ANTLR4_STATIC_LIB})
 
@@ -237,7 +290,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE pugixml-static)
 target_compile_options(${PROJECT_NAME} PRIVATE -fPIC)
 
 # Static link libstdc++ and libgcc for portability
-target_link_options(${PROJECT_NAME} PRIVATE -static-libstdc++ -static-libgcc)
+#target_link_options(${PROJECT_NAME} PRIVATE -static-libstdc++ -static-libgcc)
+target_link_options(${PROJECT_NAME} PRIVATE
+        $<$<NOT:$<PLATFORM_ID:Darwin>>:-static-libstdc++>
+        $<$<NOT:$<PLATFORM_ID:Darwin>>:-static-libgcc>
+)
 
 
 # -----------------------------------------------------------------------------
