@@ -4,6 +4,8 @@ from .schema import DetectionStatus
 from .schema import UndetectabilityReason
 from .schema import PotentiallyUndetectabilityReason
 from .schema import StructuralUndetectabilityReason
+from .schema import Actions
+from .schema import Reverter
 
 from .models import DefectModel
 from .models import ShortModel

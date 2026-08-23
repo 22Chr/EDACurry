@@ -1,12 +1,16 @@
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from src import DefectModel, ShortModel, OpenModel, OpenGateModel, ParametricModel, DetectionStatus
+from src import DefectModel, ShortModel, OpenModel, OpenGateModel, ParametricModel, DetectionStatus, Reverter
 
 current_dir = Path(__file__).resolve().parent
 eldo_cir_dir = current_dir.parent.parent.parent/"sources"/"test"/"eldo"/"circ_base"
 
 import edacurry
+
+
+circuit = edacurry.parse_eldo(f"{eldo_cir_dir}/opamp.cir")
+reverter = Reverter(circuit)
 
 # OPEN MODEL
 # name param can be None as OpenModel automatically initialize it as 'open_model'
@@ -38,12 +42,18 @@ print(subckt)
 print("\n\n")
 
 # defect injection
-circuit = edacurry.parse_eldo(f"{eldo_cir_dir}/opamp.cir")
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-open_model.inject(circuit)
+open_model.inject(circuit, reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
+
+# Reverter status
+print("Reverter status:\n")
+print(reverter.get_status())
+print("\n\n")
+
+reverter.revert_ast()
 
 
 print("testing Short Model:\n")
@@ -58,12 +68,18 @@ print(subckt)
 print("\n\n")
 
 # Defect injection
-circuit = edacurry.parse_eldo(f"{eldo_cir_dir}/opamp.cir")
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-short_model.inject(circuit)
+short_model.inject(circuit, reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
+
+# Reverter status
+print("Reverter status:\n")
+print(reverter.get_status())
+print("\n\n")
+
+reverter.revert_ast()
 
 
 # OPEN GATE MODEL
@@ -80,12 +96,18 @@ print(subckt)
 print("\n\n")
 
 # Injection test
-circuit = edacurry.parse_eldo(f"{eldo_cir_dir}/opamp.cir")
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-open_gate_model.inject(circuit)
+open_gate_model.inject(circuit, reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
+
+# Reverter status
+print("Reverter status:\n")
+print(reverter.get_status())
+print("\n\n")
+
+reverter.revert_ast()
 
 
 # PARAMETRIC MODEL
@@ -96,9 +118,17 @@ print("\n\n")
 
 # Injection test
 print("Injection test:\n")
-circuit = edacurry.parse_eldo(f"{eldo_cir_dir}/opamp.cir")
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-parametric_model.inject(circuit)
+parametric_model.inject(circuit, reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
+
+# Reverter status
+print("Reverter status:\n")
+print(reverter.get_status())
+print("\n\n")
+
+reverter.revert_ast()
+
+print(edacurry.write_eldo(circuit))

@@ -10,7 +10,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 import math
-from .schema import DefectRecord, DefectType
+from .schema import DefectRecord, DefectType, Actions, Reverter
 
 import sys
 from pathlib import Path
@@ -62,7 +62,7 @@ class DefectModel(ABC):
         pass
 
     @abstractmethod
-    def inject(self, circuit : edacurry.Circuit) -> None:
+    def inject(self, circuit : edacurry.Circuit, reverter : Reverter) -> None:
         pass
 
     @abstractmethod
@@ -119,7 +119,7 @@ class OpenModel(DefectModel):
         return subckt
 
 
-    def inject(self, circuit : edacurry.Circuit) -> None:
+    def inject(self, circuit : edacurry.Circuit, reverter : Reverter) -> None:
 
         instance_elements = self._defect_instance.split(".")
 
@@ -148,7 +148,20 @@ class OpenModel(DefectModel):
         # The defect, realised as a subckt, must be injected between the nodes of the component, so n2 in the original component must be replaced by a new node
         new_node = f"{self._n2}_open"
         try:
+
             edacurry.rename_node(component, self._n2, new_node)
+            operation = {
+                "defect_type" : DefectType.OPEN,
+                "action" : Actions.RENAME_NODE,
+                "details" : {
+                    "subckt" : subckt_name,
+                    "component" : component_name,
+                    "old_name" : self._n2,
+                    "new_name" : new_node
+                }
+            }
+            reverter.push(operation)
+
         except (Exception) as e:
             raise Exception(f"[OpenDefectModel - inject] : unable to find node {self._n2} in the component {component_name}. Injection of defect {self._defect_id} has been aborted.\n")
 
@@ -159,10 +172,18 @@ class OpenModel(DefectModel):
             raise Exception(f"[OpenDefectModel - inject] : Unable to generate {self._name} subckt for defect {self._defect_id} : {e}\n")
         circuit.content.append(om_subckt)
 
-        # TODO: Registrare l'aggiunta sul sistema di revert
+        operation = {
+            "defect_type" : DefectType.OPEN,
+            "action" : Actions.ADD_SUBCKT,
+            "details" : {
+                "subckt" : self._name,
+            }
+        }
+        reverter.push(operation)
 
         # Create phisical defect instance
-        instance = edacurry.Component(f"X{self._defect_id}", self._name)
+        component_name = f"X{self._defect_id}"
+        instance = edacurry.Component(component_name, self._name)
 
         # Connect instance to the proper nodes
         instance.nodes.append(edacurry.Node(new_node))
@@ -176,7 +197,15 @@ class OpenModel(DefectModel):
         # Append defect instance
         target_scope.content.append(instance)
 
-        # TODO: Registrare la rimozione dell'istanza sullo stack
+        operation = {
+            "defect_type" : DefectType.OPEN,
+            "action" : Actions.ADD_INSTANCE,
+            "details" : {
+                "subckt" : subckt_name,
+                "component" : component_name
+            }
+        }
+        reverter.push(operation)
 
         print("\nInjection of the open defect succeded\n")
 
@@ -235,7 +264,7 @@ class ShortModel(DefectModel):
 
         return subckt
 
-    def inject(self, circuit: edacurry.Circuit) -> None:
+    def inject(self, circuit: edacurry.Circuit, reverter : Reverter) -> None:
         instance_elements = self._defect_instance.split(".")
 
         # If the model is already present in the circuit, the AST is contaminated and the operation must be aborted
@@ -265,7 +294,20 @@ class ShortModel(DefectModel):
         # The defect, realised as a subckt, must be injected between the nodes of the component, so n2 in the original component must be replaced by a new node
         new_node = f"{self._n2}_short"
         try:
+
             edacurry.rename_node(component, self._n2, new_node)
+            operation = {
+                "defect_type" : DefectType.SHORT,
+                "action" : Actions.RENAME_NODE,
+                "details" : {
+                    "subckt" : subckt_name,
+                    "component" : component_name,
+                    "old_name" : self._n2,
+                    "new_name" : new_node
+                }
+            }
+            reverter.push(operation)
+
         except (Exception) as e:
             raise Exception(
                 f"[ShortDefectModel - inject] : unable to find node {self._n2} in the component {component_name}. Injection of defect {self._defect_id} has been aborted.\n")
@@ -278,10 +320,18 @@ class ShortModel(DefectModel):
                 f"[ShortDefectModel - inject] : Unable to generate {self._name} subckt for defect {self._defect_id} : {e}\n")
         circuit.content.append(os_subckt)
 
-        # TODO: Registrare l'aggiunta sul sistema di revert
+        operation = {
+            "defect_type": DefectType.SHORT,
+            "action": Actions.ADD_SUBCKT,
+            "details": {
+                "subckt": self._name,
+            }
+        }
+        reverter.push(operation)
 
         # Create phisical defect instance
-        instance = edacurry.Component(f"X{self._defect_id}", self._name)
+        component_name = f"X{self._defect_id}"
+        instance = edacurry.Component(component_name, self._name)
 
         # Connect instance to the proper nodes
         instance.nodes.append(edacurry.Node(new_node))
@@ -295,7 +345,15 @@ class ShortModel(DefectModel):
         # Append defect instance
         target_scope.content.append(instance)
 
-        # TODO: Registrare la rimozione dell'istanza sullo stack
+        operation = {
+            "defect_type": DefectType.SHORT,
+            "action": Actions.ADD_INSTANCE,
+            "details": {
+                "subckt": subckt_name,
+                "component": component_name
+            }
+        }
+        reverter.push(operation)
 
         print("\nInjection of the short defect succeded\n")
 
@@ -405,7 +463,7 @@ class OpenGateModel(DefectModel):
         return info_dict
 
 
-    def inject(self, circuit: edacurry.Circuit) -> None:
+    def inject(self, circuit: edacurry.Circuit, reverter : Reverter) -> None:
         # In this case, the injection consists in adding a new isolated gate that modifies MOSFET topology.
         # The component is modified in place without the need of adding new components
         instance_elements = self._defect_instance.split(".")
@@ -431,18 +489,26 @@ class OpenGateModel(DefectModel):
         else:
             component = edacurry.find_component(target_subckt, component_name)
         if component is None:
-            raise ValueError(
-                f"[OpenGateModel - inject] : unable to find component {component_name} in the AST. Injection of defect {self._defect_id} has been aborted.\n")
-
-        print(component)
+            raise ValueError(f"[OpenGateModel - inject] : unable to find component {component_name} in the AST. Injection of defect {self._defect_id} has been aborted.\n")
 
         # Retrieve the gate node
-        gate = component.nodes[1]
-        if gate.name != self._g_node:
+        gate_name = component.nodes[1].name
+        if gate_name != self._g_node:
             raise ValueError(f"[OpenGateModel - inject] : Mismatch between gate {gate.name} and {self._g_node}\n")
 
         # Gate disconnection
-        gate.name = self._g_new_node
+        edacurry.rename_node(component, self._g_node, self._g_new_node)
+        operation = {
+            "defect_type": DefectType.OPEN,
+            "action": Actions.RENAME_NODE,
+            "details": {
+                "subckt": subckt_name,
+                "component": component_name,
+                "old_name": self._g_node,
+                "new_name": self._g_new_node
+            }
+        }
+        reverter.push(operation)
 
         # Generate and add subckt to the circuit AST
         try:
@@ -452,10 +518,19 @@ class OpenGateModel(DefectModel):
                 f"[OpenGateModel - inject] : Unable to generate {self._name} subckt for defect {self._defect_id} : {e}\n")
         circuit.content.append(og_subckt)
 
-        # TODO: Registrare l'aggiunta sul sistema di revert
+        operation = {
+            "defect_type": DefectType.OPEN,
+            "action": Actions.ADD_SUBCKT,
+            "details": {
+                "subckt": self._name,
+            }
+        }
+        reverter.push(operation)
+
 
         # Create phisical defect instance
-        instance = edacurry.Component(f"X{self._defect_id}", self._name)
+        component_name = f"X{self._defect_id}"
+        instance = edacurry.Component(component_name, self._name)
 
         # Connect instance to the proper nodes
         instance.nodes.append(edacurry.Node(self._d_node))
@@ -471,7 +546,15 @@ class OpenGateModel(DefectModel):
         # Append defect instance
         target_scope.content.append(instance)
 
-        # TODO: Registrare la rimozione dell'istanza sullo stack
+        operation = {
+            "defect_type": DefectType.OPEN,
+            "action": Actions.ADD_INSTANCE,
+            "details": {
+                "subckt": subckt_name,
+                "component": component_name
+            }
+        }
+        reverter.push(operation)
 
         print("\nInjection of the open gate defect succeded\n")
 
@@ -529,7 +612,7 @@ class ParametricModel(DefectModel):
         return None
 
 
-    def inject(self, circuit : edacurry.Circuit) -> None:
+    def inject(self, circuit : edacurry.Circuit, reverter : Reverter) -> None:
 
         elements = self._defect_instance.split(".")
 
@@ -562,6 +645,17 @@ class ParametricModel(DefectModel):
         target_param.right = edacurry.Double(self._defective_value)
 
         # TODO: registra operazione di ripristino
+        operation = {
+            "defect_type" : DefectType.PARAMETRIC,
+            "action" : Actions.CHANGE_PARAM,
+            "details" : {
+                "subckt" : subckt_name,
+                "component" : component_name,
+                "parameter" : self._parameter_name,
+                "original_value" : original_value
+            }
+        }
+        reverter.push(operation)
 
         print("Defective parameter value has been successfully injected\n")
 

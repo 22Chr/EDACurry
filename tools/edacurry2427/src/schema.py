@@ -4,6 +4,12 @@
 from enum import Enum
 from typing import List, Optional
 
+import sys
+from pathlib import Path
+edacurry_exec_path = Path(__file__).resolve().parent.parent.parent.parent/"build"
+sys.path.append(str(edacurry_exec_path))
+import edacurry
+
 
 class DefectType (Enum):
     SHORT = "short"
@@ -168,3 +174,124 @@ class DefectRecord:
         }
         return dr_dict
 
+
+class Actions(Enum):
+    RENAME_NODE = "rename_node"
+    ADD_SUBCKT = "add_subckt"
+    ADD_INSTANCE = "add_instance"
+    CHANGE_PARAM = "change_param"
+
+
+class Reverter:
+
+    _oplog : List[dict] = []                # Stack used to restore the original AST after injections
+    _circuit : edacurry.Circuit             # AST
+
+    # Every operation is serialized as a dict in Json style
+
+
+    def __init__(self, circuit: edacurry.Circuit):
+        self._circuit = circuit
+
+
+    def push(self, operation):
+
+        if not operation["defect_type"] in DefectType:
+            error = f"[Reverter] - Unable to push operation : 'defect_type' param must be one of the following:\n"
+            for dt in DefectType:
+                error += f"> {dt}\n"
+            raise ValueError(error)
+
+        if not operation["action"] in Actions:
+            error = f"[Reverter] - Unable to push operation : 'action' param must be one of the following:\n]"
+            for action in Actions:
+                error += f"> {action}\n"
+            raise ValueError(error)
+
+        if operation["details"] is None:
+            raise ValueError("[Reverter] - Unable to push operation : 'details' about the performed operation must be provided\n")
+
+        self._oplog.append(operation)
+
+
+    def pop(self):
+
+        if len(self._oplog) > 0:
+            operation = self._oplog[-1]
+            action = operation["action"]
+            details = operation["details"]
+
+            if operation["defect_type"] == DefectType.SHORT or operation["defect_type"] == DefectType.OPEN:
+                if action == Actions.RENAME_NODE:
+                    # In details we have to find subckt (if present), component, old name and new name
+                    subckt_name = details["subckt"]
+                    component_name = details["component"]
+                    subckt = edacurry.find_subckt(self._circuit, component_name)
+                    if subckt is not None:
+                        component = edacurry.find_component(subckt, component_name)
+                    else:
+                        component = edacurry.find_component(self._circuit, component_name)
+                    if component is None:
+                        raise ValueError(f"[Reverter] - Unable to find component '{component_name}'. AST corrupted\n")
+                    # Restore old_name
+                    old_name = details["old_name"]
+                    new_name = details["new_name"]
+                    edacurry.rename_node(component, new_name, old_name)
+
+                if action == Actions.ADD_SUBCKT:
+                    # In details we have to find subckt_name
+                    subckt_name = details["subckt"]
+                    subckt = edacurry.find_subckt(self._circuit, subckt_name)
+                    if subckt is None:
+                        raise ValueError(f"[Reverter] - Unable to find subckt '{subckt_name}'. AST corrupted\n")
+                    self._circuit.content.remove(subckt)
+
+                if action == Actions.ADD_INSTANCE:
+                    # In details we must found the subckt name (if present) and the component name
+                    subckt_name = details["subckt"]
+                    component_name = details["component"]
+                    subckt = edacurry.find_subckt(self._circuit, subckt_name)
+                    component = None
+                    if subckt is not None:
+                        component = edacurry.find_component(subckt, component_name)
+                        if component is None:
+                            raise ValueError(f"[Reverter] - Unable to find component '{component_name}. AST corrupted'\n")
+                        subckt.content.remove(component)
+                    else:
+                        component = edacurry.find_component(self._circuit, component_name)
+                        if component is None:
+                            raise ValueError(f"[Reverter] - Unable to find component '{component_name}. AST corrupted'\n")
+                        self._circuit.content.remove(component)
+
+            else:
+                if action == Actions.CHANGE_PARAM:
+                    # in details we must found subckt (if present), component, parameter and original value
+                    subckt_name = details["subckt"]
+                    component_name = details["component"]
+                    subckt = edacurry.find_subckt(self._circuit, subckt_name)
+                    component = None
+                    if subckt is not None:
+                        component = edacurry.find_component(subckt, component_name)
+                    else:
+                        component = edacurry.find_component(self._circuit, component_name)
+                    if component is None:
+                        raise ValueError(f"[Reverter] - Unable to find component '{component_name}. AST corrupted\n")
+                    param_name = details["parameter"]
+                    parameter = edacurry.find_parameter(component, param_name)
+                    original_value = details["original_value"]
+                    parameter.right = original_value
+
+            self._oplog.remove(operation)
+
+
+    def revert_ast(self):
+        while (len(self._oplog) > 0):
+            self.pop()
+        print("[Reverter] - AST restored\n")
+
+
+    def get_status(self):
+        for operation in self._oplog:
+            for value in operation:
+                print(value, operation[value])
+            print("\n")
