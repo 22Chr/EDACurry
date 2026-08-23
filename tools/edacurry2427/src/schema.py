@@ -1,4 +1,4 @@
-# Author: Christian Checchetti (chris22checchetti@gmail.com)
+# @author: Christian Checchetti (chris22checchetti@gmail.com)
 # schema defines the defect record structure and the associated enumerations
 
 from enum import Enum
@@ -103,6 +103,7 @@ class DefectRecord:
             else:
                 self._multiplier = None
             self._weight = weight
+            self._weight = weight
             if collapsed:
                 self._collapsed = collapsed
             else:
@@ -117,12 +118,12 @@ class DefectRecord:
                 if zero_weight_justification:
                     self._0_weight_justification = zero_weight_justification
                 else:
-                    raise Exception("the reason behind a zero-weighted defect must be provided")
+                    raise Exception("the reason behind a zero-weighted defect must be provided\n")
             else:
                 self._0_weight_justification = zero_weight_justification
             self._detected = DetectionStatus.UNDETECTED
         except (Exception) as e:
-            print("[DefectRecord] Initialization error: " + str(e))
+            print(f"[DefectRecord] Initialization error: {e}\n")
 
 
 
@@ -139,8 +140,7 @@ class DefectRecord:
         elif undet_type == "SUR":
             self._undetectability_reason = StructuralUndetectabilityReason.from_str(reason)
         else:
-            error_message = ("[DefectRecord] Unable to set the specified undetectability reason. "
-                             + str(undet_type) + " is not a valid type")
+            error_message = (f"[DefectRecord] Unable to set the specified undetectability reason {str(undet_type)} is not a valid type\n")
             raise Exception(error_message)
 
 
@@ -152,7 +152,7 @@ class DefectRecord:
         return self._detected
 
 
-    def get_defect_record_info(self):
+    def get_info(self):
         dr_dict = {
             "_id": self._id,
             "_type": self._type,

@@ -5,3 +5,9 @@ from .schema import UndetectabilityReason
 from .schema import PotentiallyUndetectabilityReason
 from .schema import StructuralUndetectabilityReason
 
+from .models import DefectModel
+from .models import ShortModel
+from .models import OpenModel
+from .models import OpenGateModel
+from .models import ParametricModel
+
