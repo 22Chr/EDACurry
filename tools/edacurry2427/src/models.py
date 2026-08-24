@@ -10,7 +10,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 import math
-from .schema import DefectRecord, DefectType, Actions, Reverter
+from .utility import DefectRecord, DefectType, Actions, Reverter
 
 import sys
 from pathlib import Path

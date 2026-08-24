@@ -1,7 +1,7 @@
 # @author: Christian Checchetti (chris22checchetti@gmail.com)
 # Injector is the module responsible to perform defect injection and ngspice compatible netlist generation
 
-from .schema import Reverter
+from .utility import Reverter
 from .models import DefectModel
 
 import sys

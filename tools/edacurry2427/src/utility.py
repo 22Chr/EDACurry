@@ -11,6 +11,8 @@ edacurry_exec_path = Path(__file__).resolve().parent.parent.parent.parent/"build
 sys.path.append(str(edacurry_exec_path))
 import edacurry
 
+from collections import defaultdict
+
 
 class DefectType (Enum):
     SHORT = "short"
@@ -304,3 +306,138 @@ class Reverter:
             for value in operation:
                 print(value, operation[value])
             print("\n")
+
+
+
+class Optimizer:
+
+    _circuit : edacurry.Circuit
+    _optimised_netlist : str                # Optimised netlist : equivalent components are merged into one
+    _circuit_filename : Path | str          # Initial netlist filename
+    _optim_target : List[str]               # List of components that can be optimized. Defined in the manifest
+
+    def __init__(self, circuit: edacurry.Circuit, filename : Path | str, optim_target : List[str]):
+        self._circuit = circuit
+        if circuit is None:
+            raise ValueError("[Optimizer] - Invalid circuit\n")
+        self._circuit_filename = filename
+        self._optim_target = optim_target
+
+
+    def get_structure(self):
+
+        structure = []
+
+        for cont in self._circuit.content:
+
+            signatures = []
+            components = []
+
+            # Get components
+            for component in cont.content:
+                # Get component master
+                comp_master = component.master
+                # Get nodes
+                nodes = []
+                for node in component.nodes:
+                    nodes.append(node.name)
+                nodes = tuple(nodes)
+                # Get parameters
+                parameters = []
+                for parameter in component.parameters:
+                    parameters.append((parameter.left.name, parameter.right.value))
+                parameters = tuple(parameters)
+
+                signatures.append((comp_master, nodes, parameters))
+                components.append(component)
+            structure.append((cont, components, signatures))
+
+        return structure
+
+
+    def optimize_merge(self) -> edacurry.Circuit:
+
+        print("[Optimizer - optimize_merge] Optimizing circuit...")
+
+        if self._optim_target is None or len(self._optim_target) == 0:
+            print("[Optimizer - optimize_merge] - No optimization target has been specified. Nothing to do\n")
+            return
+
+        structure = self.get_structure()
+        has_been_optimized = False
+
+        for element in structure:
+            equivalent_components = {}
+            element_type, components, signatures = type(element[0]), element[1], element[2]
+
+            if "edacurry.Subckt" in str(element_type):
+                # Extract subckt name
+                subckt_name = element[0].name
+                if subckt_name is None:
+                    raise ValueError("[Optimizer - optimize_merge] - Unable to retrieve subckt name\n")
+                # Check if subckt name is present among the optimizable ones specified in the manifest
+                ok_to_proceed = False
+                for subckt_target_name in self._optim_target:
+                    if subckt_name.lower() == subckt_target_name.lower():
+                        ok_to_proceed = True
+                        break
+                if not ok_to_proceed:
+                    print(f"[Optimizer - optimize_merge] - {subckt_name} not specified in optim target. Skipped\n")
+                # Find subckt
+                subckt = edacurry.find_subckt(self._circuit, subckt_name)
+                if subckt is None:
+                    raise ValueError(f"[Optimizer - optimize_merge] - Unable to find subckt {subckt_name}\n")
+
+                # Find equivalent components that can be merged
+                i = 0
+                while i < len(components):
+                    # Avoid duplicates
+                    if signatures[i] in equivalent_components:
+                        i += 1
+                        continue
+
+                    j = 0
+                    while j < len(signatures):
+                        if i != j and signatures[i] == signatures[j]:
+                            if signatures[i] not in equivalent_components:
+                                equivalent_components[signatures[i]] = [components[i]]
+                            equivalent_components[signatures[i]].append(components[j])
+                        j += 1
+                    i += 1
+
+                # If no components can be merged, skip
+                if len(equivalent_components) > 0:
+                    print(f"[Optimizer - optimize_merge] - Optimizing {subckt_name}...")
+                    for signature in equivalent_components:
+                        eq_comp = len(equivalent_components[signature])
+                        i = 1
+                        # Remove equivalent components
+                        while i < len(equivalent_components[signature]):
+                            subckt.content.remove(equivalent_components[signature][i])
+                            i += 1
+                        # Adjust M parameter to indicates how many components are merged
+                        parameters = equivalent_components[signature][0].parameters
+                        # Check the presence of M parameter
+                        for parameter in parameters:
+                            if parameter.type == edacurry.ParameterType.param_assign:
+                                # parameter.left contains the name
+                                if parameter.left.name.lower() == 'm':
+                                    parameter.right = edacurry.Double(eq_comp)
+                    has_been_optimized = True
+                    print("[Optimizer - optimize_merge] - Done.\n")
+            else:
+                print(f"[Optimizer - optimize_merge] - Optimizer for {element_type} is under development\n")
+
+        if has_been_optimized:
+            # Save the optimized netlist file
+            optimized_dir = Path(__file__).resolve().parent.parent/"optimized netlists"
+            Path(optimized_dir).mkdir(parents=True, exist_ok=True)
+            optimized_filename = self._circuit_filename.split("/")[-1]
+            optimized_filename = f"{optimized_dir}/optimized_{optimized_filename}"
+            with open(optimized_filename, "w") as f:
+                f.write(edacurry.write_eldo(self._circuit))
+
+            print(f"[Optimizer - optimize_merge] - Circuit has been optimized and the netlist file has been saved in {optimized_dir}.\n")
+
+        else:
+            print(f"[Optimizer - optimize_merge] - Nothing to do.\n")
