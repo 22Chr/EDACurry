@@ -3,6 +3,7 @@
 
 from enum import Enum
 from typing import List, Optional
+import hashlib
 
 import sys
 from pathlib import Path
@@ -186,12 +187,16 @@ class Reverter:
 
     _oplog : List[dict] = []                # Stack used to restore the original AST after injections
     _circuit : edacurry.Circuit             # AST
+    _golden_hash = None                     # Original circuit hash, used to verify the AST integrity after every revert
 
     # Every operation is serialized as a dict in Json style
 
 
     def __init__(self, circuit: edacurry.Circuit):
         self._circuit = circuit
+        if self._circuit is None:
+            raise ValueError("[Reverter] Invalid circuit\n")
+        self._golden_hash = hashlib.sha256(edacurry.write_eldo(self._circuit).encode()).hexdigest()
 
 
     def push(self, operation):
@@ -287,7 +292,11 @@ class Reverter:
     def revert_ast(self):
         while (len(self._oplog) > 0):
             self.pop()
-        print("[Reverter] - AST restored\n")
+        reverted_hash = hashlib.sha256(edacurry.write_eldo(self._circuit).encode()).hexdigest()
+        if reverted_hash != self._golden_hash:
+            raise Exception(f"[Reverter] - AST restore failed.\n> Original circuit sha256 hash: {self._golden_hash}\n> Reverted circuit sha256 hash: {reverted_hash}\n")
+        else:
+            print("[Reverter] - AST restored\n")
 
 
     def get_status(self):

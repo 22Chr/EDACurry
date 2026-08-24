@@ -644,7 +644,6 @@ class ParametricModel(DefectModel):
         # Modify the param by injecting the defective value
         target_param.right = edacurry.Double(self._defective_value)
 
-        # TODO: registra operazione di ripristino
         operation = {
             "defect_type" : DefectType.PARAMETRIC,
             "action" : Actions.CHANGE_PARAM,
