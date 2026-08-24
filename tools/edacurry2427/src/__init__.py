@@ -13,3 +13,4 @@ from .models import OpenModel
 from .models import OpenGateModel
 from .models import ParametricModel
 
+from .injector import Injector

@@ -14,7 +14,7 @@ reverter = Reverter(circuit)
 
 # OPEN MODEL
 # name param can be None as OpenModel automatically initialize it as 'open_model'
-open_model = OpenModel("D0", "OPAMP1.xcc01", None, None, 0.75, 0, 0, None, "net12", "out")
+open_model = OpenModel(circuit, "D0", "OPAMP1.xcc01", None, None, 0.75, 0, 0, None, "net12", "out")
 
 # Get model info
 print("Open model info:\n")
@@ -44,7 +44,7 @@ print("\n\n")
 # defect injection
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-open_model.inject(circuit, reverter)
+open_model.inject(reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
 
@@ -57,7 +57,7 @@ reverter.revert_ast()
 
 
 print("testing Short Model:\n")
-short_model = ShortModel("D1", "OPAMP1.xcc01", None, None, 0.75, 0, 0, None, "net12", "out")
+short_model = ShortModel(circuit, "D1", "OPAMP1.xcc01", None, None, 0.75, 0, 0, None, "net12", "out")
 print(short_model.get_info())
 print("\n\n")
 
@@ -70,7 +70,7 @@ print("\n\n")
 # Defect injection
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-short_model.inject(circuit, reverter)
+short_model.inject(reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
 
@@ -85,7 +85,7 @@ reverter.revert_ast()
 # OPEN GATE MODEL
 print("Testing Open Gate Model:\n")
 
-open_gate_model = OpenGateModel("D2", "OPAMP1.mn001", None, 1, 0.75, None, None, None, "out", "net13", "vssa", "net13_open")
+open_gate_model = OpenGateModel(circuit, "D2", "OPAMP1.mn001", None, 1, 0.75, None, None, None, "out", "net13", "vssa", "net13_open")
 print(open_gate_model.get_info())
 print("\n\n")
 
@@ -98,7 +98,7 @@ print("\n\n")
 # Injection test
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-open_gate_model.inject(circuit, reverter)
+open_gate_model.inject(reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
 
@@ -112,7 +112,7 @@ reverter.revert_ast()
 
 # PARAMETRIC MODEL
 print("Testing Parametric Model:\n")
-parametric_model = ParametricModel("DP3", "OPAMP1.mn001", "MIN", None, 1, None, None, None, "W", 50e-6, 33e-6)
+parametric_model = ParametricModel(circuit, "DP3", "OPAMP1.mn001", "MIN", None, 1, None, None, None, "W", 50e-6, 33e-6)
 print(parametric_model.get_info())
 print("\n\n")
 
@@ -120,7 +120,7 @@ print("\n\n")
 print("Injection test:\n")
 print(edacurry.write_eldo(circuit))
 print("\n\n")
-parametric_model.inject(circuit, reverter)
+parametric_model.inject(reverter)
 print(edacurry.write_eldo(circuit))
 print("\n\n")
 
