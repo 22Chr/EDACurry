@@ -6,6 +6,9 @@ from .utility import PotentiallyUndetectabilityReason
 from .utility import StructuralUndetectabilityReason
 from .utility import Actions
 from .utility import Reverter
+from .utility import Optimizer
+from .utility import ComponentCategory
+from .utility import ComponentCategorizer
 
 from .models import DefectModel
 from .models import ShortModel
@@ -14,3 +17,5 @@ from .models import OpenGateModel
 from .models import ParametricModel
 
 from .injector import Injector
+
+from .universe import DefectEngine

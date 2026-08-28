@@ -21,7 +21,7 @@ class Injector:
     def __init__(self, reverter : Reverter):
         self._reverter = reverter
         if self._reverter is None:
-            raise ValueError("[Injector] : No reverter has been provided\n")
+            raise ValueError("[Injector] Initialization error: no reverter has been provided\n")
 
 
     def inject_defect(self, defect : DefectModel):
@@ -31,10 +31,10 @@ class Injector:
         defect.inject(self._reverter)
         defected_circuit = defect.get_defected_circuit()
         if defected_circuit is None:
-            raise ValueError("[Injector] : Unable to retrieve defected circuit\n")
+            raise ValueError("[Injector] Unable to retrieve defected circuit\n")
 
         self._ngspice_data = edacurry.write_ngspice(defected_circuit)
         if self._ngspice_data is None:
-            raise ValueError("[Injector] : Unable to generate ngspice compatible netlist\n")
+            raise ValueError("[Injector] Unable to generate ngspice compatible netlist\n")
 
         return self._ngspice_data

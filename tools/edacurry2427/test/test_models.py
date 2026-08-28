@@ -13,8 +13,7 @@ circuit = edacurry.parse_eldo(f"{eldo_cir_dir}/opamp.cir")
 reverter = Reverter(circuit)
 
 # OPEN MODEL
-# name param can be None as OpenModel automatically initialize it as 'open_model'
-open_model = OpenModel(circuit, "D0", "OPAMP1.xcc01", None, None, 0.75, 0, 0, None, "net12", "out")
+open_model = OpenModel(circuit, "D0", "Capacitor", "OPAMP1.xcc01", "open_model", None, 0.75, 0, 0, None, "net12", "net12")
 
 # Get model info
 print("Open model info:\n")
@@ -57,7 +56,7 @@ reverter.revert_ast()
 
 
 print("testing Short Model:\n")
-short_model = ShortModel(circuit, "D1", "OPAMP1.xcc01", None, None, 0.75, 0, 0, None, "net12", "out")
+short_model = ShortModel(circuit, "D1", "Capacitor", "OPAMP1.xcc01", "short_model", None, 0.75, 0, 0, None, "net12", "out")
 print(short_model.get_info())
 print("\n\n")
 
@@ -85,7 +84,7 @@ reverter.revert_ast()
 # OPEN GATE MODEL
 print("Testing Open Gate Model:\n")
 
-open_gate_model = OpenGateModel(circuit, "D2", "OPAMP1.mn001", None, 1, 0.75, None, None, None, "out", "net13", "vssa", "net13_open")
+open_gate_model = OpenGateModel(circuit, "D2", "MOSFET", "OPAMP1.mn001", "open_model", 1, 0.75, None, None, None, "out", "net13", "vssa", "net13_open")
 print(open_gate_model.get_info())
 print("\n\n")
 
@@ -112,7 +111,7 @@ reverter.revert_ast()
 
 # PARAMETRIC MODEL
 print("Testing Parametric Model:\n")
-parametric_model = ParametricModel(circuit, "DP3", "OPAMP1.mn001", "MIN", None, 1, None, None, None, "W", 50e-6, 33e-6)
+parametric_model = ParametricModel(circuit, "DP3", "MOSFET", "OPAMP1.mn001", "MIN", None, 1, None, None, None, "W", 50e-6, 33e-6)
 print(parametric_model.get_info())
 print("\n\n")
 
