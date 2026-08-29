@@ -1,5 +1,5 @@
 # @author: Christian Checchetti (chris22checchetti@gmail.com)
-# schema defines the defect record structure and the associated enumerations
+# utility defines a set of enumerations and useful components
 
 from enum import Enum
 from typing import List, Optional
@@ -287,7 +287,7 @@ class Reverter:
         if reverted_hash != self._golden_hash:
             raise Exception(f"[Reverter] AST restore failed.\n> Original circuit sha256 hash: {self._golden_hash}\n> Reverted circuit sha256 hash: {reverted_hash}\n")
         else:
-            print("[Reverter::revert_ast] AST restored\n")
+            print("[Reverter::revert_ast] AST restored")
 
 
     def get_status(self):
@@ -418,7 +418,7 @@ class Optimizer:
                         if not found_M:
                             parameters.append(edacurry.Parameter(edacurry.Identifier("M"), edacurry.Double(eq_comp), edacurry.ParameterType.param_assign))
                     has_been_optimized = True
-                    print("[Optimizer::optimize_merge] Done.\n")
+                    print("[Optimizer::optimize_merge] Done\n")
             else:
                 print(f"[Optimizer::optimize_merge] Optimizer for {element_type} is still under development\n")
 
@@ -434,12 +434,12 @@ class Optimizer:
             print(f"[Optimizer::optimize_merge] Circuit has been optimized and the netlist file has been saved in {optimized_dir}\n")
 
         else:
-            print(f"[Optimizer::optimize_merge] Nothing to do\n")
+            print(f"[Optimizer::optimize_merge] Nothing to do")
 
 
     # Analyses the data inside the universe details and collapse the collapsable defects
     def optimize_collapse(self, universe_details : List):
-        print("[Optimizer::optimize_collapse] Collapsing equivalent defects...]")
+        print("[Optimizer::optimize_collapse] Collapsing equivalent defects...")
         # Check if optimization is requested
         if not self._ok_to_optimize["collapse"]:
             print("[Optimizer::optimize_collapse] No optimization operation has been required. Nothing to do\n")
@@ -488,7 +488,7 @@ class Optimizer:
 
                 defects_index += 1
 
-        print("[Optimizer::optimize_collapse] Done\n")
+        print("[Optimizer::optimize_collapse] Done")
         return universe_details
 
 

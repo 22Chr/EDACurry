@@ -922,6 +922,7 @@ class DefectEngine:
 
     # Generate defects object
     def generate_defect_universe(self):
+        print("[DefectEngine::generate_defect_universe] Generating defect universe ...")
 
         defect_universe = []
 
@@ -933,7 +934,7 @@ class DefectEngine:
                 if defect_obj is not None:
                     defect_universe.append(defect_obj)
 
-
+        print("[DefectEngine::generate_defect_universe] Universe generated")
         return defect_universe
 
 

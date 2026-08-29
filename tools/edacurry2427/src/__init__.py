@@ -19,3 +19,5 @@ from .models import ParametricModel
 from .injector import Injector
 
 from .universe import DefectEngine
+
+from .dependency_manager import DependencyManager

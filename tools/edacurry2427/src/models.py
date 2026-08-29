@@ -218,7 +218,7 @@ class OpenModel(DefectModel):
         except (Exception) as e:
             raise Exception(f"[OpenModel::inject] Unable to perform injection @{self._defect_id}: {e}. Aborted\n")
 
-        print(f"\n[OpenModel::inject] Injection succeeded @{self._defect_id}\n")
+        print(f"[OpenModel::inject] Injection succeeded @{self._defect_id}")
 
 
     def get_info(self) -> dict:
@@ -351,7 +351,7 @@ class ShortModel(DefectModel):
         except Exception as e:
             raise Exception(f"[ShortDefect::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
 
-        print(f"\n[ShortModel::inject] Injection succeeded @{self._defect_id}\n")
+        print(f"[ShortModel::inject] Injection succeeded @{self._defect_id}")
 
 
     def get_info(self) -> dict:
@@ -560,7 +560,7 @@ class OpenGateModel(DefectModel):
         except Exception as e:
             raise Exception(f"[OpenDefectModel::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
 
-        print(f"\n[OpenGateModel::inject] Injection succeeded @{self._defect_id}\n")
+        print(f"[OpenGateModel::inject] Injection succeeded @{self._defect_id}")
 
 
 
@@ -663,7 +663,7 @@ class ParametricModel(DefectModel):
         except Exception as e:
             raise Exception(f"[ParametricModel::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
 
-        print(f"[ParametricModel::inject] Injection succeeded @{self._defect_id}\n")
+        print(f"[ParametricModel::inject] Injection succeeded @{self._defect_id}")
 
 
     def get_info(self) -> dict:
