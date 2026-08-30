@@ -19,7 +19,7 @@ class DependencyManager:
         os_type = platform.system().lower()
 
         # Search library in the system
-        sys_lib_name = "ngspice" if os_type != "win32" else "ngspice.dll"
+        sys_lib_name = "libngspice" if os_type != "win32" else "ngspice.dll"
         if os_type == "darwin":
             # Check homebrew presence
             if not shutil.which("brew"):
@@ -35,7 +35,7 @@ class DependencyManager:
                     text = True,
                     check = True,
                 )
-                self._lib_path = self._lib_path.stdout.strip()
+                self._lib_path = Path(self._lib_path.stdout.strip())/"lib"/"libngspice.dylib"
             except subprocess.CalledProcessError:
                 pass
 

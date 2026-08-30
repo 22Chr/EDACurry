@@ -21,3 +21,7 @@ from .injector import Injector
 from .universe import DefectEngine
 
 from .dependency_manager import DependencyManager
+
+from .simulator_engine import SimulatorEngine
+
+from .campaign_director import CampaignDirector
