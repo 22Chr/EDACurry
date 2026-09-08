@@ -7,7 +7,6 @@
 from .simulator_engine import SimulatorEngine
 from .injector import Injector
 from .models import DefectModel
-from .utility import Reverter
 import os
 import sys
 import signal
@@ -19,8 +18,9 @@ from typing import List
 
 
 # Top-level worker function to avoid pickling/spawn issues with instance methods
-def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, testbench: str, reverter: Reverter):
-    injector = Injector(reverter)
+def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, testbench: str, circuit_path : str | Path):
+
+    injector = Injector(circuit_path)
     simulator_engine = SimulatorEngine(ngspice_path)
 
     ngspice_netlist, warnings = injector.inject_defect(defect)
@@ -28,7 +28,7 @@ def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, testbenc
         simulation_result = simulator_engine.simulate(ngspice_netlist, testbench)
 
         # TODO: call the reporter to examine simulation result and return the updated defect record
-        return "success"
+        return simulation_result
     except Exception as e:
         # TODO: call the reporter to examine simulation result and return the updated defect record
         return "failed"
@@ -50,24 +50,24 @@ class CampaignDirector:
     _defect_universe : List[DefectModel]
     _ngspice_path : Path | str
     _testbench : str
-    _reverter : Reverter
+    _circuit_path : str
     _cpu_count : int
     _pool : ProcessPoolExecutor
 
-    def __init__(self, defect_universe : List[DefectModel], ngspice_path : Path | str, testbench : str, reverter : Reverter):
+    def __init__(self, defect_universe : List[DefectModel], ngspice_path : Path | str, testbench : str, circuit_path : str | Path):
         print("[CampaignDirector] Initializing campaign director...")
-        self._defect_universe = defect_universe
-        if self._defect_universe is None:
+        if defect_universe is None:
             raise ValueError("[CampaignDirector] Initialization error: no defect universe has been provided")
-        self._ngspice_path = ngspice_path
+        self._defect_universe = defect_universe
         if ngspice_path is None:
             raise ValueError("[CampaignDirector] Initialization error: no path for ngspice library has been provided")
-        self._testbench = testbench
-        if self._testbench is None:
+        self._ngspice_path = ngspice_path
+        if testbench is None:
             raise ValueError("[CampaignDirector] Initialization error: no testbench has been provided")
-        self._reverter = reverter
-        if self._reverter is None:
-            raise ValueError("[CampaignDirector] Initialization error: no reverter has been provided")
+        self._testbench = testbench
+        if circuit_path is None:
+            raise ValueError("[CampaignDirector] Initialization error: no netlist has been provided")
+        self._circuit_path = circuit_path
         self._cpu_count = SystemScanner().get_cpu_count()
         if self._cpu_count is None:
             raise ValueError("[CampaignDirector] Initialization error: unable to initialize process pool")
@@ -102,7 +102,7 @@ class CampaignDirector:
         try:
             tasks = {
                 self._pool.submit(
-                    _execute_simulation, defect, self._ngspice_path, self._testbench, self._reverter
+                    _execute_simulation, defect, self._ngspice_path, self._testbench, self._circuit_path
                 ): defect
                 for defect in self._defect_universe
             }
@@ -111,14 +111,13 @@ class CampaignDirector:
             defect_count = len(self._defect_universe)
             for future in concurrent.futures.as_completed(tasks):
                 defect = tasks[future]
-                completed_count += 1
 
                 try:
                     report.append(future.result())
+                    completed_count += 1
                     print(f"[CampaignDirector::run_campaign] Campaign status: {completed_count}/{defect_count} processed")
                 except Exception as e:
-                    print(f"[CampaignDirector::run_campaign] Un error occurred @{defect.get_info()['defect_record']['id']}: {e}")
-
+                    print(f"[CampaignDirector::run_campaign] An error occurred @{defect.get_info()['defect_record']['id']}: {e}")
         except KeyboardInterrupt:
             print("\n[CampaignDirector::run_campaign] Execution interrupted by user.")
             self._cleanup()
@@ -128,7 +127,3 @@ class CampaignDirector:
 
         print("[CampaignDirector::run_campaign] Campaign completed")
         return report
-
-
-
-# TODO: SOLVE PICKLE ISSUE RELATED TO EDACURRY.CIRCUIT OBJECTS

@@ -25,7 +25,7 @@ class SimulatorEngine:
     _exit_callback = None
 
     def __init__(self, lib_path : Path | str):
-        print("[SimulatorEngine] Simulator initialization...")
+        print("\n[SimulatorEngine] Simulator initialization...")
         try:
             self._ngspice = ctypes.CDLL(str(lib_path))
         except OSError as e:
@@ -105,7 +105,6 @@ class SimulatorEngine:
 
         # Merging netlist and testbench
         netlist_and_tb = netlist + testbench
-        print(netlist_and_tb)
 
         # Netlist and tb preparation as NULL terminating strings array
         raw_netlist_and_tb = netlist_and_tb.splitlines()

@@ -853,7 +853,6 @@ class DefectEngine:
         if not defect_data["No_2427_defect"] and defect_data["weight"] > 0:
             if defect_data["defect_type"] == DefectType.SHORT:
                 return ShortModel(
-                    defect_data["circuit"],
                     defect_data["defect_id"],
                     defect_data["component_category"],
                     defect_data["defect_instance"],
@@ -870,7 +869,6 @@ class DefectEngine:
             elif defect_data["defect_type"] == DefectType.OPEN:
                 if defect_data["open_gate"]:
                     return OpenGateModel(
-                        defect_data["circuit"],
                         defect_data["defect_id"],
                         defect_data["component_category"],
                         defect_data["defect_instance"],
@@ -888,7 +886,6 @@ class DefectEngine:
 
                 else:
                     return OpenModel(
-                        defect_data["circuit"],
                         defect_data["defect_id"],
                         defect_data["component_category"],
                         defect_data["defect_instance"],
@@ -904,7 +901,6 @@ class DefectEngine:
 
             elif defect_data["defect_type"] == DefectType.PARAMETRIC:
                 return ParametricModel(
-                    defect_data["circuit"],
                     defect_data["defect_id"],
                     defect_data["component_category"],
                     defect_data["defect_instance"],

@@ -10,7 +10,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 import math
-from .utility import DefectRecord, DefectType, Actions, Reverter
+from .utility import DefectRecord, DefectType
 
 import sys
 from pathlib import Path
@@ -32,14 +32,9 @@ class DefectModel(ABC):
     _merged : Optional[int]               # defect record's attribute
     _0_w_j : Optional[str]                # defect record's attribute
 
-    _circuit: edacurry.Circuit
 
-
-    def __init__(self, circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j):
+    def __init__(self, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j):
         try:
-            self._circuit = circuit
-            if self._circuit is None:
-                raise ValueError("[DefectModel] Initialization error: Invalid circuit")
             self._defect_id = defect_id
             self._component_category = component_category
             self._defect_instance = defect_instance
@@ -64,16 +59,12 @@ class DefectModel(ABC):
         pass
 
     @abstractmethod
-    def inject(self, reverter : Reverter) -> None:
+    def inject(self, circuit_path : str | Path) -> edacurry.Circuit:
         pass
 
     @abstractmethod
     def get_info(self) -> dict:
         pass
-
-    def get_defected_circuit(self) -> edacurry.Circuit:
-        return self._circuit
-
 
 
 
@@ -85,9 +76,9 @@ class OpenModel(DefectModel):
     _n2: str                              # Node 2
 
 
-    def __init__(self, circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, n1, n2):
+    def __init__(self, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, n1, n2):
         try:
-            super().__init__(circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j)
+            super().__init__(defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j)
             self._n1 = n1
             self._n2 = n2
             self._record = DefectRecord(defect_id, component_category, DefectType.OPEN, defect_instance, [n1, n2], name, multiplier, weight, collapsed, merged, z_w_j)
@@ -124,14 +115,16 @@ class OpenModel(DefectModel):
         return subckt
 
 
-    def inject(self, reverter : Reverter) -> None:
+    def inject(self, circuit_path : Path | str) -> edacurry.Circuit:
+
+        circuit = edacurry.parse_eldo(circuit_path)
 
         instance_elements = self._defect_instance.split(".")
 
         # If the model is already present in the circuit, the AST is contaminated and the operation must be aborted
         component_name = instance_elements[-1]
         instance_elements.remove(component_name)
-        om_subckt = edacurry.find_subckt(self._circuit, component_name)
+        om_subckt = edacurry.find_subckt(circuit, component_name)
         if om_subckt is not None:
             raise ValueError(f"[OpenDefectModel::inject] AST contamination detected @{self._defect_id}. Aborted\n")
 
@@ -139,12 +132,12 @@ class OpenModel(DefectModel):
         subckt_name = instance_elements[-1]
         target_subckt = None
         if subckt_name is not None:
-            target_subckt = edacurry.find_subckt(self._circuit, subckt_name)
+            target_subckt = edacurry.find_subckt(circuit, subckt_name)
 
         # Find component (Can be found in the circuit or in a subckt)
         component = None
         if target_subckt is None:
-            component = edacurry.find_component(self._circuit, component_name)
+            component = edacurry.find_component(circuit, component_name)
         else:
             component = edacurry.find_component(target_subckt, component_name)
         if component is None:
@@ -153,20 +146,7 @@ class OpenModel(DefectModel):
         # The defect, realised as a subckt, must be injected between the nodes of the component, so n2 in the original component must be replaced by a new node
         new_node = f"{self._n2}_open"
         try:
-
             edacurry.rename_node(component, self._n2, new_node)
-            operation = {
-                "defect_type" : DefectType.OPEN,
-                "action" : Actions.RENAME_NODE,
-                "details" : {
-                    "subckt" : subckt_name,
-                    "component" : component_name,
-                    "old_name" : self._n2,
-                    "new_name" : new_node
-                }
-            }
-            reverter.push(operation)
-
         except (Exception) as e:
             raise Exception(f"[OpenModel::inject] Unable to perform injection @{self._defect_id}: {e}. Aborted\n")
 
@@ -175,19 +155,7 @@ class OpenModel(DefectModel):
             om_subckt = self.generate_subckt()
         except Exception as e:
             raise Exception(f"[OpenDefectModel::inject] Unable to generate {self._name} subckt for defect {self._defect_id} : {e}\n")
-        self._circuit.content.append(om_subckt)
-
-        try:
-            operation = {
-                "defect_type" : DefectType.OPEN,
-                "action" : Actions.ADD_SUBCKT,
-                "details" : {
-                    "subckt" : self._name,
-                }
-            }
-            reverter.push(operation)
-        except (Exception) as e:
-            raise Exception(f"[OpenDefectModel::inject] Unable to perform injection @{self._defect_id}: {e}. Aborted\n")
+        circuit.content.append(om_subckt)
 
         # Create phisical defect instance
         component_name = f"X{self._defect_id}"
@@ -198,27 +166,15 @@ class OpenModel(DefectModel):
         instance.nodes.append(edacurry.Node(self._n2))
 
         # Insert instance in the correct scope
-        target_scope = edacurry.find_subckt(self._circuit, subckt_name)
+        target_scope = edacurry.find_subckt(circuit, subckt_name)
         if target_scope is None:
             raise Exception(f"[OpenDefectModel::inject] Unable to define the proper injection scope\n")
 
         # Append defect instance
         target_scope.content.append(instance)
 
-        try:
-            operation = {
-                "defect_type" : DefectType.OPEN,
-                "action" : Actions.ADD_INSTANCE,
-                "details" : {
-                    "subckt" : subckt_name,
-                    "component" : component_name
-                }
-            }
-            reverter.push(operation)
-        except (Exception) as e:
-            raise Exception(f"[OpenModel::inject] Unable to perform injection @{self._defect_id}: {e}. Aborted\n")
-
         print(f"[OpenModel::inject] Injection succeeded @{self._defect_id}")
+        return circuit
 
 
     def get_info(self) -> dict:
@@ -239,9 +195,9 @@ class ShortModel(DefectModel):
     _n1 : str                               # Node 1
     _n2 : str                               # Node 2
 
-    def __init__(self, circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, n1, n2):
+    def __init__(self, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, n1, n2):
         try:
-            super().__init__(circuit, defect_id, component_category, defect_instance, "short_model", multiplier, weight, collapsed, merged, z_w_j)
+            super().__init__(defect_id, component_category, defect_instance, "short_model", multiplier, weight, collapsed, merged, z_w_j)
             self._n1 = n1
             self._n2 = n2
             self._record = DefectRecord(defect_id, component_category, DefectType.SHORT, defect_instance, [n1, n2], name, multiplier, weight, collapsed, merged, z_w_j)
@@ -275,13 +231,16 @@ class ShortModel(DefectModel):
 
         return subckt
 
-    def inject(self, reverter : Reverter) -> None:
+    def inject(self, circuit_path : Path | str) -> edacurry.Circuit:
+
+        circuit = edacurry.parse_eldo(circuit_path)
+
         instance_elements = self._defect_instance.split(".")
 
         # If the model is already present in the circuit, the AST is contaminated and the operation must be aborted
         component_name = instance_elements[-1]
         instance_elements.remove(component_name)
-        os_subckt = edacurry.find_subckt(self._circuit, component_name)
+        os_subckt = edacurry.find_subckt(circuit, component_name)
         if os_subckt is not None:
             raise ValueError(
                 f"[ShortDefectModel::inject] AST contamination detected @{self._defect_id}. Aborted\n")
@@ -290,12 +249,12 @@ class ShortModel(DefectModel):
         subckt_name = instance_elements[-1]
         target_subckt = None
         if subckt_name is not None:
-            target_subckt = edacurry.find_subckt(self._circuit, subckt_name)
+            target_subckt = edacurry.find_subckt(circuit, subckt_name)
 
         # Find component (Can be found in the circuit or in a subckt)
         component = None
         if target_subckt is None:
-            component = edacurry.find_component(self._circuit, component_name)
+            component = edacurry.find_component(circuit, component_name)
         else:
             component = edacurry.find_component(target_subckt, component_name)
         if component is None:
@@ -308,19 +267,7 @@ class ShortModel(DefectModel):
         except Exception as e:
             raise Exception(
                 f"[ShortDefectModel::inject] Unable to generate {self._name} subckt for defect {self._defect_id} : {e}\n")
-        self._circuit.content.append(os_subckt)
-
-        try:
-            operation = {
-                "defect_type": DefectType.SHORT,
-                "action": Actions.ADD_SUBCKT,
-                "details": {
-                    "subckt": self._name,
-                }
-            }
-            reverter.push(operation)
-        except Exception as e:
-            raise Exception(f"[ShortDefect::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
+        circuit.content.append(os_subckt)
 
         # Create phisical defect instance
         component_name = f"X{self._defect_id}"
@@ -331,27 +278,15 @@ class ShortModel(DefectModel):
         instance.nodes.append(edacurry.Node(self._n2))
 
         # Insert instance in the correct scope
-        target_scope = edacurry.find_subckt(self._circuit, subckt_name)
+        target_scope = edacurry.find_subckt(circuit, subckt_name)
         if target_scope is None:
             raise Exception(f"[ShortDefectModel::inject] Unable to define the proper injection scope\n")
 
         # Append defect instance
         target_scope.content.append(instance)
 
-        try:
-            operation = {
-                "defect_type": DefectType.SHORT,
-                "action": Actions.ADD_INSTANCE,
-                "details": {
-                    "subckt": subckt_name,
-                    "component": component_name
-                }
-            }
-            reverter.push(operation)
-        except Exception as e:
-            raise Exception(f"[ShortDefect::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
-
         print(f"[ShortModel::inject] Injection succeeded @{self._defect_id}")
+        return circuit
 
 
     def get_info(self) -> dict:
@@ -381,9 +316,9 @@ class OpenGateModel(DefectModel):
     _r3 : float = 1e12                      # 1TΩ resistance between internal node and Gate
 
 
-    def __init__(self, circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, d_node, g_node, s_node, g_new_node):
+    def __init__(self, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, d_node, g_node, s_node, g_new_node):
         try:
-            super().__init__(circuit, defect_id, component_category, defect_instance, "open_gate_model", multiplier, weight, collapsed, merged, z_w_j)
+            super().__init__(defect_id, component_category, defect_instance, "open_gate_model", multiplier, weight, collapsed, merged, z_w_j)
             self._defect_id = defect_id
             self._d_node = d_node
             self._g_node = g_node
@@ -459,7 +394,10 @@ class OpenGateModel(DefectModel):
         return info_dict
 
 
-    def inject(self, reverter : Reverter) -> None:
+    def inject(self, circuit_path : Path | str) -> edacurry.Circuit:
+
+        circuit = edacurry.parse_eldo(circuit_path)
+
         # In this case, the injection consists in adding a new isolated gate that modifies MOSFET topology.
         # The component is modified in place without the need of adding new components
         instance_elements = self._defect_instance.split(".")
@@ -467,7 +405,7 @@ class OpenGateModel(DefectModel):
         # If the model is already present in the circuit, the AST is contaminated and the operation must be aborted
         component_name = instance_elements[-1]
         instance_elements.remove(component_name)
-        og_subckt = edacurry.find_subckt(self._circuit, component_name)
+        og_subckt = edacurry.find_subckt(circuit, component_name)
         if og_subckt is not None:
             raise ValueError(
                 f"[OpenGateModel::inject] AST contamination detected @{self._defect_id}. Aborted\n")
@@ -476,12 +414,12 @@ class OpenGateModel(DefectModel):
         subckt_name = instance_elements[-1]
         target_subckt = None
         if subckt_name is not None:
-            target_subckt = edacurry.find_subckt(self._circuit, subckt_name)
+            target_subckt = edacurry.find_subckt(circuit, subckt_name)
 
         # Find component (Can be found in the circuit or in a subckt)
         component = None
         if target_subckt is None:
-            component = edacurry.find_component(self._circuit, component_name)
+            component = edacurry.find_component(circuit, component_name)
         else:
             component = edacurry.find_component(target_subckt, component_name)
         if component is None:
@@ -494,20 +432,6 @@ class OpenGateModel(DefectModel):
 
         # Gate disconnection
         edacurry.rename_node(component, self._g_node, self._g_new_node)
-        try:
-            operation = {
-                "defect_type": DefectType.OPEN,
-                "action": Actions.RENAME_NODE,
-                "details": {
-                    "subckt": subckt_name,
-                    "component": component_name,
-                    "old_name": self._g_node,
-                    "new_name": self._g_new_node
-                }
-            }
-            reverter.push(operation)
-        except Exception as e:
-            raise Exception(f"[OpenDefectModel::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
 
         # Generate and add subckt to the circuit AST
         try:
@@ -515,19 +439,7 @@ class OpenGateModel(DefectModel):
         except Exception as e:
             raise Exception(
                 f"[OpenGateModel::inject] Unable to generate {self._name} subckt @{self._defect_id} : {e}\n")
-        self._circuit.content.append(og_subckt)
-
-        try:
-            operation = {
-                "defect_type": DefectType.OPEN,
-                "action": Actions.ADD_SUBCKT,
-                "details": {
-                    "subckt": self._name,
-                }
-            }
-            reverter.push(operation)
-        except Exception as e:
-            raise Exception(f"[OpenDefectModel::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
+        circuit.content.append(og_subckt)
 
         # Create phisical defect instance
         component_name = f"X{self._defect_id}"
@@ -540,27 +452,15 @@ class OpenGateModel(DefectModel):
 
         # Insert instance in the correct scope
         parent_name = self._defect_instance.split(".")
-        target_scope = edacurry.find_subckt(self._circuit, subckt_name)
+        target_scope = edacurry.find_subckt(circuit, subckt_name)
         if target_scope is None:
             raise Exception(f"[OpenGateModel::inject] : Unable to define the proper injection scope @{self._defect_id}\n")
 
         # Append defect instance
         target_scope.content.append(instance)
 
-        try:
-            operation = {
-                "defect_type": DefectType.OPEN,
-                "action": Actions.ADD_INSTANCE,
-                "details": {
-                    "subckt": subckt_name,
-                    "component": component_name
-                }
-            }
-            reverter.push(operation)
-        except Exception as e:
-            raise Exception(f"[OpenDefectModel::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
-
         print(f"[OpenGateModel::inject] Injection succeeded @{self._defect_id}")
+        return circuit
 
 
 
@@ -575,11 +475,11 @@ class ParametricModel(DefectModel):
     _record : DefectRecord
 
 
-    def __init__(self, circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, parameter_name, typical_value, pdk_corner_value):
+    def __init__(self, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j, parameter_name, typical_value, pdk_corner_value):
         try:
             if name != "MIN" and name != "MAX":
                 raise ValueError("Model name indicates the deviation direction, so it can only be 'MIN' or 'MAX'")
-            super().__init__(circuit, defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j)
+            super().__init__(defect_id, component_category, defect_instance, name, multiplier, weight, collapsed, merged, z_w_j)
             self._parameter_name = parameter_name
             self._typical_value = typical_value
             self._pdk_corner_value = pdk_corner_value
@@ -616,7 +516,9 @@ class ParametricModel(DefectModel):
         return None
 
 
-    def inject(self, reverter : Reverter) -> None:
+    def inject(self, circuit_path : Path | str) -> edacurry.Circuit:
+
+        circuit = edacurry.parse_eldo(circuit_path)
 
         elements = self._defect_instance.split(".")
 
@@ -627,14 +529,14 @@ class ParametricModel(DefectModel):
         subckt = None
         if elements is not None:
             subckt_name = elements[-1]
-            subckt = edacurry.find_subckt(self._circuit, subckt_name)
+            subckt = edacurry.find_subckt(circuit, subckt_name)
 
         # Find AST component and modify the parameter value in-place
         component = None
         if subckt is not None:
             component = edacurry.find_component(subckt, component_name)
         else:
-            component = edacurry.find_component(self._circuit, component_name)
+            component = edacurry.find_component(circuit, component_name)
         if component is None:
             raise ValueError(f"[ParametricModel::inject] Component {component_name} not found in the AST @{self._defect_id}\n")
 
@@ -648,22 +550,8 @@ class ParametricModel(DefectModel):
         # Modify the param by injecting the defective value
         target_param.right = edacurry.Double(self._defective_value)
 
-        try:
-            operation = {
-                "defect_type" : DefectType.PARAMETRIC,
-                "action" : Actions.CHANGE_PARAM,
-                "details" : {
-                    "subckt" : subckt_name,
-                    "component" : component_name,
-                    "parameter" : self._parameter_name,
-                    "original_value" : original_value
-                }
-            }
-            reverter.push(operation)
-        except Exception as e:
-            raise Exception(f"[ParametricModel::inject] Unable to perform injection @{self._defect_id} : {e}. Aborted\n")
-
         print(f"[ParametricModel::inject] Injection succeeded @{self._defect_id}")
+        return circuit
 
 
     def get_info(self) -> dict:

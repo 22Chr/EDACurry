@@ -1,7 +1,6 @@
 # @author: Christian Checchetti (chris22checchetti@gmail.com)
 # Injector is the module responsible to perform defect injection and ngspice compatible netlist generation
 
-from .utility import Reverter
 from .models import DefectModel
 
 import sys
@@ -15,21 +14,17 @@ from typing import List
 
 class Injector:
 
-    _reverter : Reverter
     _ngspice_data : (str, List[str]) = None
+    _circuit_path : Path | str = None
 
-    def __init__(self, reverter : Reverter):
-        self._reverter = reverter
-        if self._reverter is None:
-            raise ValueError("[Injector] Initialization error: no reverter has been provided\n")
+    def __init__(self, circuit_path : Path | str):
+        if circuit_path is None:
+            raise ValueError("[Injector] Initialization error: no circuit file has been provided\n")
+        self._circuit_path = circuit_path
 
 
     def inject_defect(self, defect : DefectModel):
-        # AST restore
-        self._reverter.revert_ast()
-
-        defect.inject(self._reverter)
-        defected_circuit = defect.get_defected_circuit()
+        defected_circuit = defect.inject(self._circuit_path)
         if defected_circuit is None:
             raise ValueError("[Injector] Unable to retrieve defected circuit\n")
 

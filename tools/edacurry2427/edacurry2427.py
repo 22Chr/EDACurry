@@ -13,7 +13,7 @@ import edacurry
 import argparse
 
 # Import modules
-from src import Optimizer, Reverter, DefectEngine, Injector, DependencyManager, SimulatorEngine, CampaignDirector
+from src import Optimizer, DefectEngine, DependencyManager, CampaignDirector
 
 
 if __name__ == '__main__':
@@ -69,16 +69,6 @@ if __name__ == '__main__':
     defect_universe = defect_engine.generate_defect_universe()
     print("[EDACURRY2427] Done\n\n")
 
-    # Loading reverter
-    print("[EDACURRY2427] Loading Reverter...")
-    reverter = Reverter(circuit)
-    print("[EDACURRY2427] Done\n")
-
-    # Loading injector
-    #print("[EDACURRY2427] Starting Injector...")
-    #injector = Injector(reverter)
-    #print("[EDACURRY2427] Done\n")
-
     # Parsing the testbanch file with the ngspice edacurry's backend
     print("[EDACURRY2427] Preparing testbench...")
     testbench_filename = args.testbench
@@ -94,6 +84,9 @@ if __name__ == '__main__':
 
 
     print("[EDACURRY2427] Retrieving defect simulation report...")
-    campaign_director = CampaignDirector(defect_universe, ngspice_path, ng_testbench, reverter)
+    campaign_director = CampaignDirector(defect_universe, ngspice_path, ng_testbench, circuit_filename)
     campaign_report = campaign_director.run_campaign()
     print("[EDACURRY2427] Report acquired\n")
+    print("\n\nTesting analyses reports - Debug only")
+    for report in campaign_report:
+        print(report, "\n")

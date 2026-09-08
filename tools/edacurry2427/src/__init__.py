@@ -4,8 +4,6 @@ from .utility import DetectionStatus
 from .utility import UndetectabilityReason
 from .utility import PotentiallyUndetectabilityReason
 from .utility import StructuralUndetectabilityReason
-from .utility import Actions
-from .utility import Reverter
 from .utility import Optimizer
 from .utility import ComponentCategory
 from .utility import ComponentCategorizer
