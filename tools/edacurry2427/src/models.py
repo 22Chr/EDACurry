@@ -101,12 +101,13 @@ class OpenModel(DefectModel):
         subckt.nodes.append(n2)
 
         # Ropen resistance definition
-        r_open = edacurry.Component("R_open", "R")
+        r_open = edacurry.Component("R_open", "")
         r_open.nodes.append(edacurry.Node("n1"))
         r_open.nodes.append(edacurry.Node("n2"))
 
         # Set resistance value as a parameter
-        param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r_open), edacurry.ParameterType.param_assign)
+        #param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r_open), edacurry.ParameterType.param_assign)
+        param = edacurry.Parameter(None, edacurry.Double(self._r_open), edacurry.ParameterType.param_no_equal)
         r_open.parameters.append(param)
 
         # Add resistance to the subckt
@@ -218,12 +219,13 @@ class ShortModel(DefectModel):
         subckt.nodes.append(n2)
 
         # Rshort resistance definition
-        r_open = edacurry.Component("R_short", "R")
+        r_open = edacurry.Component("R_short", "")
         r_open.nodes.append(edacurry.Node("n1"))
         r_open.nodes.append(edacurry.Node("n2"))
 
         # Set resistance value as a parameter
-        param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r_short), edacurry.ParameterType.param_assign)
+        #param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r_short), edacurry.ParameterType.param_assign)
+        param = edacurry.Parameter(None, edacurry.Double(self._r_short), edacurry.ParameterType.param_no_equal)
         r_open.parameters.append(param)
 
         # Add resistance to the subckt
@@ -348,31 +350,34 @@ class OpenGateModel(DefectModel):
 
         # Resistances definition
         # Resistance between Drain and internal
-        r_d_n = edacurry.Component("R_dn", "R")
+        r_d_n = edacurry.Component("R_dn", "")
         r_d_n.nodes.append(edacurry.Node("d"))
         r_d_n.nodes.append(edacurry.Node("n"))
 
         # Resistance between Source and internal
-        r_s_n = edacurry.Component("R_sn", "R")
+        r_s_n = edacurry.Component("R_sn", "")
         r_s_n.nodes.append(edacurry.Node("s"))
         r_s_n.nodes.append(edacurry.Node("n"))
 
         # Resistance between Internal and Gate
-        r_n_g = edacurry.Component("R_ng", "R")
+        r_n_g = edacurry.Component("R_ng", "")
         r_n_g.nodes.append(edacurry.Node("n"))
         r_n_g.nodes.append(edacurry.Node("g"))
 
         # Set resistances values as parameters
         # r_d_n
-        param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r1), edacurry.ParameterType.param_assign)
+        #param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r1), edacurry.ParameterType.param_assign)
+        param = edacurry.Parameter(None, edacurry.Double(self._r1), edacurry.ParameterType.param_no_equal)
         r_d_n.parameters.append(param)
 
         # r_s_n
-        param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r2), edacurry.ParameterType.param_assign)
+        #param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r2), edacurry.ParameterType.param_assign)
+        param = edacurry.Parameter(None, edacurry.Double(self._r2), edacurry.ParameterType.param_no_equal)
         r_s_n.parameters.append(param)
 
         # r_n_g
-        param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r3), edacurry.ParameterType.param_assign)
+        #param = edacurry.Parameter(edacurry.Identifier("r"), edacurry.Double(self._r3), edacurry.ParameterType.param_assign)
+        param = edacurry.Parameter(None, edacurry.Double(self._r3), edacurry.ParameterType.param_no_equal)
         r_n_g.parameters.append(param)
 
         # Add resistance to the subckt

@@ -152,9 +152,9 @@ class DefectEngine:
                                 open_weight = 1
                                 short_weight = 1
 
-                        # Components merged during optimization
+                        # Components merged during optimization or specified as merged in the DUT
                         merged = None
-                        if m_param[1] > 1 : merged = m_param[1]
+                        merged = m_param[1]
 
                         if not no_2427_defect:
                             # Short model between nodes
@@ -381,6 +381,9 @@ class DefectEngine:
 
                             for couple in coupled_nodes:
                                 calculate_weight = True
+                                short_weight = 0
+                                z_w_j = None
+
                                 # Define weights according to the couple
                                 if calculate_weight and source == bulk:
                                     short_weight = 0
@@ -405,7 +408,7 @@ class DefectEngine:
 
                                 # Components merged during optimization
                                 merged = None
-                                if m_param[1] > 1: merged = m_param[1]
+                                merged = m_param[1]
 
                                 # Generate a short for couple
                                 short_defect = {
@@ -663,7 +666,7 @@ class DefectEngine:
                             m_param = ("M", 1)
 
                         merged = None
-                        if m_param[1] > 1: merged = m_param[1]
+                        merged = m_param[1]
 
                         # Short defect
                         if not no_2427_defect:
@@ -835,7 +838,7 @@ class DefectEngine:
                         defect_metadata.append(record)
 
                     else:
-                        print(f"[DefectEngine::process_defect] Category {category.value} is still under development")
+                        print(f"[DefectEngine::process_defect] Category {category.value} is still under development. Component {components[index].name} has been excluded from defect injection")
 
 
 

@@ -74,8 +74,23 @@ int NgspiceBackend::visitAnalysis(const std::shared_ptr<structure::Analysis> &e)
 }
 
 int NgspiceBackend::visitComponent(const std::shared_ptr<structure::Component> &e) {
+
+    std::string passive_component_type;
+
+    const std::string &comp_name = e->getName();
+    if (comp_name[0] == 'R' || comp_name[0] == 'r') {
+        // Resistor
+        passive_component_type = "R";
+    } else if (comp_name[0] == 'C' || comp_name[0] == 'c') {
+        // Capacitor
+        passive_component_type = "C";
+    } else if (comp_name[0] == 'L' || comp_name[0] == 'l') {
+        // Inductor
+        passive_component_type = "L";
+    }
+
     //r2 1 2 res1
-    ss << e->getName();
+    ss << comp_name;
     if (e->nodes) {
         for (const auto &node : e->nodes) {
             ss << ' ';
@@ -89,7 +104,8 @@ int NgspiceBackend::visitComponent(const std::shared_ptr<structure::Component> &
     if (e->parameters) {
         for (const auto &parameter : e->parameters) {
             ss << ' ';
-            parameter->accept(this);
+            //parameter->accept(this);
+            visitParameter(parameter, passive_component_type);
         }
     }
     ss << '\n';
@@ -267,13 +283,15 @@ int NgspiceBackend::visitDouble(const std::shared_ptr<structure::Number<double>>
     return 0;
 }
 
-int NgspiceBackend::visitParameter(const std::shared_ptr<structure::Parameter> &e)
+int NgspiceBackend::visitParameter(const std::shared_ptr<structure::Parameter> &e, std::string passive_component_type)
 {
+    bool left_ignored = false;
     if ((e->getType() == param_assign) || (e->getType() == param_arithmetic)) {
         if (e->getLeft() && !e->getHideName()) {
             auto ident = std::dynamic_pointer_cast<const structure::Identifier>(e->getLeft());
+            std::string identifier;
             if (ident) {
-                std::string identifier = ident->getName();
+                identifier = ident->getName();
                 std::transform(std::begin(identifier), std::end(identifier), std::begin(identifier), ::tolower);
 
                 if (is_eldo_only(identifier)) {
@@ -285,7 +303,30 @@ int NgspiceBackend::visitParameter(const std::shared_ptr<structure::Parameter> &
                     return 1;
                 }
             }
-            e->getLeft()->accept(this);
+
+            if (passive_component_type.empty()){
+                e->getLeft()->accept(this);
+            } else {
+                if (passive_component_type == "R") {
+                    if (identifier != "r") {
+                        e->getLeft()->accept(this);
+                    } else {
+                        left_ignored = true;
+                    }
+                } else if (passive_component_type == "C") {
+                    if (identifier != "c") {
+                        e->getLeft()->accept(this);
+                    } else {
+                        left_ignored = true;
+                    }
+                } else if (passive_component_type == "L") {
+                    if (identifier != "l") {
+                        e->getLeft()->accept(this);
+                    } else {
+                        left_ignored = true;
+                    }
+                }
+            }
         }
         if (e->getRight()) {
             auto ident = std::dynamic_pointer_cast<const structure::Identifier>(e->getRight());
@@ -294,14 +335,13 @@ int NgspiceBackend::visitParameter(const std::shared_ptr<structure::Parameter> &
                 std::transform(std::begin(identifier), std::end(identifier), std::begin(identifier), ::tolower);
                 if (is_eldo_only(identifier)) {
                     std::string warning_message;
-                    warning_message.append("[NgspiceBackend::visitParameter] Parameter ").append(identifier)
-                            .append(" is not supported by ngspice. Ignored by visitor\n");
+                    warning_message.append("[NgspiceBackend::visitParameter] Parameter ").append(identifier).append(" is not supported by ngspice. Ignored by visitor\n");
                     warnings.push_back(warning_message);
                     std::cerr << warning_message << std::endl;
                     return 1;
                 }
             }
-            if (e->getLeft() && !e->getHideName())
+            if (!left_ignored && e->getLeft() && !e->getHideName())
                 ss << '=';
             if (e->getType() == param_arithmetic)
                 ss << '{';

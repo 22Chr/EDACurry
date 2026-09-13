@@ -4,6 +4,7 @@
 from enum import Enum
 from typing import List, Optional
 import hashlib
+import re
 
 import sys
 from pathlib import Path
@@ -167,6 +168,97 @@ class DefectRecord:
         return dr_dict
 
 
+class SpiceScaleFactors(Enum):
+    T = 1e12
+    G = 1e9
+    MEG = 1e6
+    K = 1e3
+    MIL = 25.4e-6
+    M = 1e-3
+    U = 1e-6
+    N = 1e-9
+    P = 1e-12
+    F = 1e-15
+    A = 1e-18
+
+    @classmethod
+    def from_prefix(cls, unit):
+        if unit and unit.lower() == "t":
+            return cls.T.value
+        elif unit and  unit.lower() == "g":
+            return cls.G.value
+        elif unit and unit.lower() == "meg":
+            return cls.MEG.value
+        elif unit and unit.lower() == "k":
+            return cls.K.value
+        elif unit and unit.lower() == "mil":
+            return cls.MIL.value
+        elif unit and unit.lower() == "m":
+            return cls.M.value
+        elif unit and unit.lower() == "u":
+            return cls.U.value
+        elif unit and unit.lower() == "n":
+            return cls.N.value
+        elif unit and unit.lower() == "p":
+            return cls.P.value
+        elif unit and unit.lower() == "f":
+            return cls.F.value
+        elif unit and unit.lower() == "a":
+            return cls.A.value
+        else:
+            return None
+
+
+class ParamValueAnalyzer:
+    @classmethod
+    def get_param_info(cls, param : edacurry.Value):
+        """
+            - Identifier: name --> Done
+            - Expression: operator, first, second
+            - ExpressionUnary: operator, value
+            - FunctionCall: name, parameters
+            - Number: value, unit --> Done
+            - String: string
+            - ValueList: values, delimiter
+            - ValuePair: first, second
+
+        """
+        if param:
+            if type(param) == edacurry.Identifier:
+                value = param.name
+                # A numeric value can be parsed by EDACurry as an identifier, so it's possible to have a value like 400n
+                # Verify the presence of a unit
+
+                pattern_capture = r"^(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)([a-zA-Z]+)$"
+                data = re.match(pattern_capture, value)
+                unit = None
+
+                if data:
+                    value, unit = data.groups()
+
+                # Remove unit from value
+                if unit is not None:
+                    value = value.replace(unit, "")
+
+                # Cast to float if numeric
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+
+                unit_value = SpiceScaleFactors.from_prefix(unit)
+                if unit_value:
+                    value *= unit_value
+
+                return value
+
+            elif type(param) == edacurry.Int or type(param) == edacurry.Double:
+                return param.value
+
+        else:
+            return None
+
+
 class Optimizer:
 
     _circuit : edacurry.Circuit
@@ -196,28 +288,31 @@ class Optimizer:
         structure = []
 
         for cont in self._circuit.content:
+            # Analyze only the design under test
+            if cont.name in self._manifest_file["dut"]:
 
-            signatures = []
-            components = []
+                signatures = []
+                components = []
 
-            # Get components
-            for component in cont.content:
-                # Get component master
-                comp_master = component.master
-                # Get nodes
-                nodes = []
-                for node in component.nodes:
-                    nodes.append(node.name)
-                nodes = tuple(nodes)
-                # Get parameters
-                parameters = []
-                for parameter in component.parameters:
-                    parameters.append((parameter.left.name, parameter.right.value))
-                parameters = tuple(parameters)
+                # Get components
+                for component in cont.content:
+                    # Get component master
+                    comp_master = component.master
+                    # Get nodes
+                    nodes = []
+                    for node in component.nodes:
+                        nodes.append(node.name)
+                    nodes = tuple(nodes)
+                    # Get parameters
+                    parameters = []
+                    for parameter in component.parameters:
+                        # Collect parameters based on their type
+                        parameters.append((ParamValueAnalyzer.get_param_info(parameter.left), ParamValueAnalyzer.get_param_info(parameter.right)))
 
-                signatures.append((comp_master, nodes, parameters))
-                components.append(component)
-            structure.append((cont, components, signatures))
+                    parameters = tuple(parameters)
+                    signatures.append((comp_master, nodes, parameters))
+                    components.append(component)
+                structure.append((cont, components, signatures))
 
         return structure
 

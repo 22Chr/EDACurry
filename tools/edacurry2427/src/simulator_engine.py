@@ -4,6 +4,8 @@
 import os
 import ctypes
 from pathlib import Path
+import threading
+import signal
 
 # ======================================================================================================================
 # NGSPICE PYTHON WRAPPER (according to the ngspice manual)
@@ -21,15 +23,22 @@ class SimulatorEngine:
 
     _ngspice = None                                     # Shared dynamic library
     _out_log = []                                       # Output buffer to save simulation results
+    _tmp_log_file = None
+    _timeout_limit :float
     _sendchar_callback = None
     _exit_callback = None
 
-    def __init__(self, lib_path : Path | str):
+    def __init__(self, lib_path : Path | str, tmp_log_file : Path | str, timeout):
         print("\n[SimulatorEngine] Simulator initialization...")
+        self._tmp_log_file = tmp_log_file
         try:
             self._ngspice = ctypes.CDLL(str(lib_path))
         except OSError as e:
             raise ImportError(f"[SimulatorEngine] Failed to load ngspice dynamic shared library: {e}")
+
+        if timeout is None:
+            raise ValueError(f"[SimulatorEngine] No timeout value has been provided")
+        self._timeout_limit = timeout
 
         # ngspice C API configuration
         self._setup_c_api()
@@ -95,36 +104,89 @@ class SimulatorEngine:
         return 0
 
 
+    # Function to be called after timeout
+    def on_timeout(self):
+        print(
+            f"[SimulatorEngine::simulate] WARNING: {self._timeout_limit} seconds timeout limit exceeded. Partial simulation log file will be saved and simulation will be aborted...")
+        current_log = "\n".join(self._out_log)
+        current_log += f"\n[SIMULATOR ERROR] {self._timeout_limit} seconds timeout exceeded."
+        try:
+            print(f"[SimulatorEngine::simulate] Saving simulation partial log on {self._tmp_log_file}...")
+            with open(self._tmp_log_file, "w", encoding="utf8") as file:
+                file.write(current_log)
+                file.flush()
+                os.fsync(file.fileno()) # Prevent data loss caused by os_exit(1)
+            print("[SimulatorEngine::simulate] Partial simulation log file saved\n")
+
+        except Exception as e:
+            print(f"[SimulatorEngine::simulate] ERROR: Unable to write log file: {e}\n")
+
+        finally:
+            #os._exit(1)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+
     # Orchestrate the simulation
-    def simulate(self, netlist : str, testbench : str) -> str:
+    def simulate(self, entry_point : str | Path) -> str:
+
         # Clear output log for a new simulation
         self._out_log.clear()
 
-        # Remove .end directive from netlist
-        netlist = netlist.replace(".end\n", "\n\n* Testbench\n")
+        # Entry point file preparation as NULL terminating strings array
+        #raw_netlist = netlist.splitlines()
+        raw_content = None
+        try:
+            with open(entry_point, "r") as file:
+                raw_content = file.readlines()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"[SimulatorEngine::simulate] {entry_point} not found. Operation aborted\n")
 
-        # Merging netlist and testbench
-        netlist_and_tb = netlist + testbench
-
-        # Netlist and tb preparation as NULL terminating strings array
-        raw_netlist_and_tb = netlist_and_tb.splitlines()
+        if not raw_content:
+            raise ValueError("[SimulatorEngine::simulate] Unable to extract contents from entry point file")
 
         # Reproducing the netlist as a list of C-like strings
-        c_netlist_and_tb = [ctypes.c_char_p(line.encode("utf-8")) for line in raw_netlist_and_tb]
-        c_netlist_and_tb.append(None) # NULL terminator
+        #c_netlist = [ctypes.c_char_p(line.encode("utf-8")) for line in raw_netlist]
+        #c_netlist.append(None) # NULL terminator
+        c_content = [ctypes.c_char_p(line.encode("utf-8")) for line in raw_content]
+        c_content.append(None) # NULL terminator
 
         # Creating a ctypes array
-        ctypes_array = ctypes.c_char_p * len(c_netlist_and_tb)
-        c_array = ctypes_array(*c_netlist_and_tb)
+        #ctypes_array = ctypes.c_char_p * len(c_netlist)
+        #c_array = ctypes_array(*c_netlist)
+        ctypes_array = ctypes.c_char_p * len(c_content)
+        c_array = ctypes_array(*c_content)
 
         # Loading the circuit in memory
         self._ngspice.ngSpice_Circ(c_array)
 
-        # Run simulation
-        self._ngspice.ngSpice_Command(b"run")
+        # Watchdog timer
+        timer = threading.Timer(self._timeout_limit, self.on_timeout)
+        timer.start()
+        try:
 
-        # Cleaning memory to prevet leaks during the next simulation
-        self._ngspice.ngSpice_Command(b"destroy all")
+            # TODO: Make it stronger
+            # Set compatibility mode
+            self._ngspice.ngSpice_Command(b"set ngbehavior=hsa")
 
-        # Return simulation log produced by ngspice
-        return "\n".join(self._out_log)
+            # Transient limit
+            self._ngspice.ngSpice_Command(b"option itl5=10000")
+            self._ngspice.ngSpice_Command(b"option itl4=20") # Single point iteration
+            #self._ngspice.ngSpice_Command(b"set rthresh=1e-15")
+            #self._ngspice.ngSpice_Command(b"options noopiter")
+
+            # Run simulation
+            self._ngspice.ngSpice_Command(b"run")
+
+            # Cleaning memory to prevet leaks during the next simulation
+            self._ngspice.ngSpice_Command(b"destroy all")
+            self._ngspice.ngSpice_Command(b"remcirc")
+
+            # Return simulation log produced by ngspice
+            return "\n".join(self._out_log)
+
+        except RuntimeError as e:
+            raise RuntimeError(f"[SimulatorEngine::simulate] An unexpected error occurred during ngspice simulation: {e}\n")
+
+        finally:
+            # Stop timer in case simulation succeded
+            timer.cancel()

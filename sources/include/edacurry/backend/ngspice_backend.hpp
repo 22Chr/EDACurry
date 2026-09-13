@@ -34,7 +34,7 @@ public:
     int visitUnsigned(const std::shared_ptr<structure::Number<unsigned>> &e) override;
     int visitInt(const std::shared_ptr<structure::Number<int>> &e) override;
     int visitDouble(const std::shared_ptr<structure::Number<double>> &e) override;
-    int visitParameter(const std::shared_ptr<structure::Parameter> &e) override;
+    int visitParameter(const std::shared_ptr<structure::Parameter> &e, std::string passive_component_type);
     int visitSubckt(const std::shared_ptr<structure::Subckt> &e) override;
     int visitString(const std::shared_ptr<structure::String> &e) override;
     int visitValuePair(const std::shared_ptr<structure::ValuePair> &e) override;
