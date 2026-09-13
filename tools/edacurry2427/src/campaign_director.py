@@ -8,27 +8,60 @@ from .simulator_engine import SimulatorEngine
 from .injector import Injector
 from .models import DefectModel
 import os
+import shutil
 import sys
 import signal
 import atexit
+import threading
 import multiprocessing as mp
 from pathlib import Path
 from typing import List
 
-""" TODO: Valutare l'utilizzo della libreria textual per suddividere la finestra in cpu_count riquadri.
-          In questo modo ogni processo mostra ordinatamente cosa stia facendo
-"""
+from textual.app import App, ComposeResult
+from textual.containers import Grid
+from textual.widgets import Header, Footer, RichLog
+
+
+class WorkerStdoutStream:
+    # Custom stream replacing sys.stdout to redirect worker print() outputs to the assigned Textual slot
+    def __init__(self, slot_id: int, log_queue: mp.Queue):
+        self._slot_id = slot_id
+        self._log_queue = log_queue
+        self._buffer = ""
+
+    def write(self, text: str):
+        if not text:
+            return
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            self._log_queue.put((self._slot_id, line.rstrip("\r")))
+
+    def flush(self):
+        if self._buffer:
+            self._log_queue.put((self._slot_id, self._buffer.rstrip("\r")))
+            self._buffer = ""
 
 
 # Top-level worker function to avoid pickling/spawn issues with instance methods
-def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, circuit_path : str | Path, raw_circuit_filename : Path | str, entry_point_filename : str | Path, tmp_log_dir : Path | str, timeout : float) -> List:
+def _execute_simulation(slot_id: int, log_queue: mp.Queue, defect : DefectModel, ngspice_path: Path | str, circuit_path : str | Path, raw_circuit_filename : Path | str, entry_point_filename : str | Path, tmp_log_dir : Path | str, timeout : float, dialect : str) -> List:
 
-    # Set working directory for the wroker process
+    # Direct all prints in this worker execution to the UI log queue for the assigned core slot
+    stream = WorkerStdoutStream(slot_id, log_queue)
+    sys.stdout = stream
+    sys.stderr = stream
+
+    # Clear previous output from this UI slot before starting a new run
+    log_queue.put((slot_id, "__CLEAR__"))
+
+    # Set working directory for the worker process
     working_path = Path(entry_point_filename).parent.resolve()
     os.chdir(working_path)
 
     defect_id = defect.get_info()["defect_record"]["id"]
     tmp_log_file = f"{tmp_log_dir}/{defect_id}_log.txt"
+
+    print(f"[CampaignDirector::execute_simulation] Starting defect simulation @{defect_id}...\n")
 
     injector = Injector(circuit_path)
     simulator_engine = SimulatorEngine(ngspice_path, tmp_log_file, timeout)
@@ -44,7 +77,7 @@ def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, circuit_
         with open (defected_netlist, "w") as file:
             print(f"[CampaignDirector::execute_simulation] Writing {defected_netlist}...")
             file.write(ngspice_netlist)
-            print(f"[CampaignDirector::execute_simulation] Defected netlist has been successfully saved")
+            print(f"[CampaignDirector::execute_simulation] Defected netlist has been successfully saved\n")
     except Exception as e:
         raise Exception(f"[CampaignDirector::execute_simulation] Unable to write defected ngspice compatible netlist: {e}")
 
@@ -75,7 +108,6 @@ def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, circuit_
     except Exception as e:
         raise Exception(f"[CampaignDirector::execute_simulation] Unable write the new entry point for the simulation: {e}")
 
-
     if warnings:
         print("[CampaignDirector::execute_simulation] Warnings from EDACurry ngspice backend:\n")
         for warning in warnings:
@@ -83,7 +115,8 @@ def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, circuit_
         print("\n")
 
     try:
-        simulation_result = simulator_engine.simulate(defected_entry_point_filename)
+        simulation_result = simulator_engine.simulate(defected_entry_point_filename, dialect)
+        print(f"\n[CampaignDirector::execute_simulation] Simulation @{defect_id} completed successfully\n")
 
         # TODO: call the reporter to examine simulation result and return the updated defect record
         return ngspice_netlist + "\n" + simulation_result
@@ -92,20 +125,54 @@ def _execute_simulation(defect : DefectModel, ngspice_path: Path | str, circuit_
         print(f"\n\nDebug: exception in simulation: {e}\n\n")
         return f"[SIMULATION ERROR] Unable to execute simulation @{defect_id}: {e}"
 
-    """
-    finally:
-        # Remove temp netlist file
-        try:
-            print(f"[CampaignDirector::execute_simulation] Deleting {defected_netlist}...")
-            os.remove(defected_netlist)
-            print("[CampaignDirector::execute_simulation] Temporary defected netlist successfully removed")
 
-            print(f"[CampaignDirector::execute_simulation] Deleting {defected_entry_point_filename}...")
-            os.remove(defected_entry_point_filename)
-            print("[CampaignDirector::execute_simulation] Temporary entry point file successfully removed")
-        except Exception as e:
-            raise Exception(f"[CampaignDirector::execute_simulation] Unable to remove {defected_netlist}: {e}")
+
+class SimulationDashboard(App):
+    # Textual dashboard for per-process terminal output separation
+    CSS = """
+    Grid {
+        grid-size: 2;
+        grid-gutter: 1;
+        padding: 1;
+    }
+    RichLog {
+        border: round green;
+        height: 100%;
+    }
     """
+
+    def __init__(self, cpu_count: int, log_queue: mp.Queue):
+        super().__init__()
+        self._cpu_count = cpu_count
+        self._log_queue = log_queue
+        self._logs = {}
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with Grid():
+            for i in range(self._cpu_count):
+                log_widget = RichLog(highlight=True, markup=False, wrap=True)
+                log_widget.border_title = f"Worker Core #{i}"
+                self._logs[i] = log_widget
+                yield log_widget
+        yield Footer()
+
+    def on_mount(self) -> None:
+        # Check for new messages from workers every 50ms
+        self.set_interval(0.05, self._drain_queue)
+
+    def _drain_queue(self) -> None:
+        while not self._log_queue.empty():
+            try:
+                slot_id, message = self._log_queue.get_nowait()
+                if slot_id in self._logs:
+                    if message == "__CLEAR__":
+                        self._logs[slot_id].clear()
+                    else:
+                        self._logs[slot_id].write(message)
+            except Exception:
+                break
+
 
 class SystemScanner:
     _cpu_count : int = None                 # CPU cores
@@ -128,6 +195,8 @@ class CampaignDirector:
     _tmp_log_dir : Path | str
     _cpu_count : int
     _pool : mp.Pool
+    _manager : mp.Manager
+    _dashboard_app : SimulationDashboard
 
     def __init__(self, defect_universe : List[DefectModel], ngspice_path : Path | str, circuit_path : str | Path, raw_circuit_filename : Path | str, entry_point_filename : Path | str, tmp_log_dir : Path | str):
         print("[CampaignDirector] Initializing campaign director...")
@@ -153,7 +222,8 @@ class CampaignDirector:
         if self._cpu_count is None:
             raise ValueError("[CampaignDirector] Initialization error: unable to initialize process pool")
         self._pool = None
-
+        self._manager = None
+        self._dashboard_app = None
 
     def _clean_tmp_files(self):
         # Cleaning tmp files generated during the analysis
@@ -168,12 +238,22 @@ class CampaignDirector:
                 except Exception as e:
                     print(f"[CampaignDirector::clean_tmp_files] Unable to remove {content.name}: {e}\n")
         print("[CampaignDirector::clean_tmp_files] Temporary files have been removed\n")
+        # Cleaning up tmp_logs dir
+        try:
+            if self._tmp_log_dir.exists():
+                print("[CampaignDirector::clean_tmp_files] Cleaning up temporary logs directory...")
+                shutil.rmtree(self._tmp_log_dir)
+                print(f"[CampaignDirector::clean_tmp_files] {self._tmp_log_dir} successfully removed")
+        except Exception as e:
+            print(f"[CampaignDirector::clean_tmp_files] Unable to remove {self._tmp_log_dir}: {e}\n")
 
     def _cleanup(self):
         # Shutdown executor and terminate all running child processes immediately
         if self._pool is not None:
             self._pool.terminate()
             self._pool.join()
+        if self._manager is not None:
+            self._manager.shutdown()
         # Clean tmp files
         self._clean_tmp_files()
 
@@ -183,9 +263,77 @@ class CampaignDirector:
         self._cleanup()
         sys.exit(1)
 
-    def run_campaign(self, timeout):
+    def _execute_campaign_tasks(self, timeout: float, dialect : str, report_holder: list, error_holder: list, log_queue: mp.Queue):
+        # Worker thread routine to handle simulation pool execution while Textual handles UI
+        try:
+            total_defects = len(self._defect_universe)
+            completed_count = 0
+
+            # Distribute tasks associating each defect deterministically to a slot (0 to cpu_count - 1)
+            async_results = [
+                (
+                    defect,
+                    self._pool.apply_async(
+                        _execute_simulation,
+                        (
+                            idx % self._cpu_count,
+                            log_queue,
+                            defect,
+                            self._ngspice_path,
+                            self._circuit_path,
+                            self._raw_circuit_filename,
+                            self._entry_point_filename,
+                            self._tmp_log_dir,
+                            timeout,
+                            dialect
+                        ),
+                    ),
+                )
+                for idx, defect in enumerate(self._defect_universe)
+            ]
+
+            for defect, result in async_results:
+                defect_id = defect.get_info()["defect_record"]["id"]
+                try:
+                    # Wait for single simulation completion
+                    res = {
+                        "defect_id" : defect_id,
+                        "timeout_limit_exceeded" : False,
+                        "simulation_result" : result.get(timeout)
+                    }
+                    report_holder.append(res)
+                except Exception:
+                    tmp_log = Path(self._tmp_log_dir) / f"{defect_id}_log.txt"
+                    if tmp_log.exists():
+                        try:
+                            with open(tmp_log, "r", encoding="utf-8", errors="ignore") as f:
+                                sim_content = f.read()
+                                res = {
+                                    "defect_id" : defect_id,
+                                    "timeout_limit_exceeded" : True,
+                                    "simulation_result" : sim_content
+                                }
+                                report_holder.append(res)
+                        except BaseException as e:
+                            error_holder.append(Exception(f"[CampaignDirector::run_campaign] An error occurred @{defect_id}: {e}"))
+                            break
+                    else:
+                        error_holder.append(Exception(f"[CampaignDirector::run_campaign] FATAL ERROR: tmp log for defect {defect_id} not found. Campaign aborted"))
+                        break
+                finally:
+                    completed_count += 1
+                    if self._dashboard_app:
+                        self._dashboard_app.title = f"Campaign Status: {completed_count}/{total_defects} processed"
+
+        finally:
+            # Terminate Textual UI on completion
+            if self._dashboard_app:
+                self._dashboard_app.call_from_thread(self._dashboard_app.exit)
+
+    def run_campaign(self, timeout, dialect):
         print("[CampaignDirector::run_campaign] Running campaign...")
         report = []
+        errors = []
 
         # Register cleanup and signal handlers in the main execution flow
         atexit.register(self._cleanup)
@@ -197,67 +345,38 @@ class CampaignDirector:
             pass
 
         ctx = mp.get_context("spawn")
+        self._manager = ctx.Manager()
+        log_queue = self._manager.Queue()
+
         self._pool = ctx.Pool(self._cpu_count)
 
-        task_args = [
-            (defect, self._ngspice_path, self._circuit_path, self._raw_circuit_filename, self._entry_point_filename, self._tmp_log_dir, timeout)
-            for defect in self._defect_universe
-        ]
+        self._dashboard_app = SimulationDashboard(
+            cpu_count=self._cpu_count,
+            log_queue=log_queue
+        )
+        self._dashboard_app.title = f"Campaign Status: 0/{len(self._defect_universe)} processed"
 
-        async_results = [
-            (
-                defect,
-                self._pool.apply_async(
-                    _execute_simulation,
-                    (
-                        defect,
-                        self._ngspice_path,
-                        self._circuit_path,
-                        self._raw_circuit_filename,
-                        self._entry_point_filename,
-                        self._tmp_log_dir,
-                        timeout
-                    ),
-                ),
-            )
-            for defect in self._defect_universe
-        ]
+        # Run pool execution in background thread to let Textual own the main event loop
+        campaign_thread = threading.Thread(
+            target=self._execute_campaign_tasks,
+            args=(timeout, dialect, report, errors, log_queue),
+            daemon=True
+        )
+        campaign_thread.start()
 
-        total_defects = len(self._defect_universe)
-        completed_count = 0
+        # Start Textual UI (blocking on main thread)
+        self._dashboard_app.run()
 
-        for defect, result in async_results:
-            defect_id = defect.get_info()["defect_record"]["id"]
-            try:
-                # Wait for single simulation completion
-                res = {
-                    "defect_id" : defect_id,
-                    "simulation_result" : result.get(timeout)
-                }
-                report.append(res)
-            except Exception:
-                tmp_log = Path(self._tmp_log_dir) / f"{defect_id}_log.txt"
-                if tmp_log.exists():
-                    try:
-                        with open(tmp_log, "r", encoding="utf-8", errors="ignore") as f:
-                            result = f.read()
-                            res = {
-                                "defect_id" : defect_id,
-                                "simulation_result" : result
-                            }
-                            report.append(res)
-                    except BaseException as e:
-                        raise Exception(f"[CampaignDirector::run_campaign] An error occurred @{defect_id}: {e}")
-                else:
-                    print(f"[CampaignDirector::run_campaign] FATAL ERROR: tmp log for defect {defect_id} not found. Campaign aborted\n")
-                    exit(1)
-            finally:
-                completed_count += 1
-                print(f"[CampaignDirector::run_campaign] Campaign status: {completed_count}/{total_defects} processed")
-                sys.stdout.flush()
+        campaign_thread.join()
 
         self._pool.terminate()
         self._pool.join()
+        self._manager.shutdown()
+
+        if errors:
+            print(f"[CampaignDirector::run_campaign] An error occurred during campaign: {errors[0]}")
+            self._clean_tmp_files()
+            raise errors[0]
 
         print("[CampaignDirector::run_campaign] Campaign completed\n")
 

@@ -127,7 +127,8 @@ class SimulatorEngine:
 
 
     # Orchestrate the simulation
-    def simulate(self, entry_point : str | Path) -> str:
+    def simulate(self, entry_point : str | Path, dialect : str) -> str:
+        print("[SimulatorEngine::simulate] Running ngspice simulation...")
 
         # Clear output log for a new simulation
         self._out_log.clear()
@@ -145,8 +146,6 @@ class SimulatorEngine:
             raise ValueError("[SimulatorEngine::simulate] Unable to extract contents from entry point file")
 
         # Reproducing the netlist as a list of C-like strings
-        #c_netlist = [ctypes.c_char_p(line.encode("utf-8")) for line in raw_netlist]
-        #c_netlist.append(None) # NULL terminator
         c_content = [ctypes.c_char_p(line.encode("utf-8")) for line in raw_content]
         c_content.append(None) # NULL terminator
 
@@ -165,14 +164,17 @@ class SimulatorEngine:
         try:
 
             # TODO: Make it stronger
-            # Set compatibility mode
-            self._ngspice.ngSpice_Command(b"set ngbehavior=hsa")
+            # Set compatibility mode according to DUT dialect
+            if dialect.lower() == "eldo" or dialect.lower() == "hspice":
+                self._ngspice.ngSpice_Command(b"set ngbehavior=hsa")
+            elif dialect.lower() == "pspice" or dialect.lower() == "ltspice":
+                self._ngspice.ngSpice_Command(b"set ngbehavior=ltpsa")
+            elif dialect.lower() == "kicad":
+                self._ngspice.ngSpice_Command(b"set ngbehavior=ki")
 
             # Transient limit
             self._ngspice.ngSpice_Command(b"option itl5=10000")
             self._ngspice.ngSpice_Command(b"option itl4=20") # Single point iteration
-            #self._ngspice.ngSpice_Command(b"set rthresh=1e-15")
-            #self._ngspice.ngSpice_Command(b"options noopiter")
 
             # Run simulation
             self._ngspice.ngSpice_Command(b"run")
@@ -190,3 +192,4 @@ class SimulatorEngine:
         finally:
             # Stop timer in case simulation succeded
             timer.cancel()
+            print("[SimulatorEngine::simulate] ngspice simulation completed\n")

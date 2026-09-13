@@ -1,6 +1,7 @@
 # @author: Christian Checchetti (chris22checchetti@gmail.com)
 
 import json
+import shutil
 from pathlib import Path
 import sys
 import os
@@ -44,6 +45,20 @@ if __name__ == '__main__':
     if manifest_data is None:
         raise ValueError("Unable to extract manifest data")
     print("[EDACURRY2427] Manifest has been correctly processed\n")
+
+    # Check netlist dialect
+    dialect = None
+    try:
+        dialect = manifest_data["dialect"]
+    except KeyError:
+        raise ValueError("[EDACURRY2427] Unable to extract dialect details from manifest")
+    if dialect is None:
+        raise ValueError("[EDACURRY2427] Unable to extract dialect details from manifest")
+
+    # Check for Spectre dialect
+    if dialect.lower() == "spectre":
+        print("[EDACURRY2427] Spectre dialect is not supported\n")
+        exit(1)
 
     # Retrieving timeout
     timeout = None
@@ -129,9 +144,19 @@ if __name__ == '__main__':
     # Running simulation
     print("[EDACURRY2427] Retrieving defect simulation report...")
     campaign_director = CampaignDirector(defect_universe, ngspice_path, circuit_filename, raw_circuit_filename, entry_point_filename, tmp_log_dir)
-    campaign_report = campaign_director.run_campaign(timeout)
+    campaign_report = campaign_director.run_campaign(timeout, dialect)
     print("[EDACURRY2427] Report acquired\n")
+
 
     print("\n\nTesting analyses reports - Debug only")
     for report in campaign_report:
         print(report, "\n")
+
+
+    # Cleaning tmp_logs dir
+    print("[EDACURRY2427] Cleaning up temporary logs directory...")
+    try:
+        shutil.rmtree(tmp_log_dir)
+    except Exception as e:
+        print(f"[EDACURRY2427] Unable to remove temporary logs directory: {e}\n")
+    print("[EDACURRY2427] Done\n")
