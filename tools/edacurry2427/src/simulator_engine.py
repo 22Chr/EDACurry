@@ -24,7 +24,7 @@ class SimulatorEngine:
     _ngspice = None                                     # Shared dynamic library
     _out_log = []                                       # Output buffer to save simulation results
     _tmp_log_file = None
-    _timeout_limit :float
+    _timeout_limit : int
     _sendchar_callback = None
     _exit_callback = None
 
@@ -163,7 +163,6 @@ class SimulatorEngine:
         timer.start()
         try:
 
-            # TODO: Make it stronger
             # Set compatibility mode according to DUT dialect
             if dialect.lower() == "eldo" or dialect.lower() == "hspice":
                 self._ngspice.ngSpice_Command(b"set ngbehavior=hsa")
@@ -173,7 +172,6 @@ class SimulatorEngine:
                 self._ngspice.ngSpice_Command(b"set ngbehavior=ki")
 
             # Transient limit
-            self._ngspice.ngSpice_Command(b"option itl5=10000")
             self._ngspice.ngSpice_Command(b"option itl4=20") # Single point iteration
 
             # Run simulation

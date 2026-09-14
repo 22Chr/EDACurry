@@ -16,6 +16,9 @@ import threading
 import multiprocessing as mp
 from pathlib import Path
 from typing import List
+edacurry_exec_path = Path(__file__).resolve().parent.parent.parent.parent/"build"
+sys.path.append(str(edacurry_exec_path))
+import edacurry
 
 from textual.app import App, ComposeResult
 from textual.containers import Grid
@@ -70,6 +73,12 @@ def _execute_simulation(slot_id: int, log_queue: mp.Queue, defect : DefectModel,
     if not ngspice_netlist:
         raise Exception("[CampaignDirector::execute_simulation] Unable to generate defected ngspice compatible netlist")
 
+    if warnings:
+        print("[CampaignDirector::execute_simulation] Warnings from EDACurry ngspice backend:\n")
+        for warning in warnings:
+            print(warning)
+        print("\n")
+
     # Save the defected netlist alongside the original one to perform injection
     path_name = circuit_path
     defected_netlist = path_name.replace(raw_circuit_filename, f"@{defect_id}_{raw_circuit_filename}")
@@ -97,6 +106,7 @@ def _execute_simulation(slot_id: int, log_queue: mp.Queue, defect : DefectModel,
         if f'.include"{raw_circuit_filename}"' in line or f'.inc"{raw_circuit_filename}"' in line:
             line = f'.include "{defected_netlist}"'
             entry_point_content[index] = line
+            break
         index += 1
 
     defected_entry_point_filename = entry_point_filename
@@ -108,20 +118,11 @@ def _execute_simulation(slot_id: int, log_queue: mp.Queue, defect : DefectModel,
     except Exception as e:
         raise Exception(f"[CampaignDirector::execute_simulation] Unable write the new entry point for the simulation: {e}")
 
-    if warnings:
-        print("[CampaignDirector::execute_simulation] Warnings from EDACurry ngspice backend:\n")
-        for warning in warnings:
-            print(warning)
-        print("\n")
-
     try:
         simulation_result = simulator_engine.simulate(defected_entry_point_filename, dialect)
         print(f"\n[CampaignDirector::execute_simulation] Simulation @{defect_id} completed successfully\n")
-
-        # TODO: call the reporter to examine simulation result and return the updated defect record
-        return ngspice_netlist + "\n" + simulation_result
+        return simulation_result
     except Exception as e:
-        # TODO: call the reporter to examine simulation result and return the updated defect record
         print(f"\n\nDebug: exception in simulation: {e}\n\n")
         return f"[SIMULATION ERROR] Unable to execute simulation @{defect_id}: {e}"
 
@@ -225,7 +226,7 @@ class CampaignDirector:
         self._manager = None
         self._dashboard_app = None
 
-    def _clean_tmp_files(self):
+    def _clean_tmp_files(self, remove_logs_dir):
         # Cleaning tmp files generated during the analysis
         # Every tmp file starts with @
         print("[CampaignDirector::clean_tmp_files] Cleaning up temporary files...")
@@ -240,7 +241,7 @@ class CampaignDirector:
         print("[CampaignDirector::clean_tmp_files] Temporary files have been removed\n")
         # Cleaning up tmp_logs dir
         try:
-            if self._tmp_log_dir.exists():
+            if remove_logs_dir and self._tmp_log_dir.exists():
                 print("[CampaignDirector::clean_tmp_files] Cleaning up temporary logs directory...")
                 shutil.rmtree(self._tmp_log_dir)
                 print(f"[CampaignDirector::clean_tmp_files] {self._tmp_log_dir} successfully removed")
@@ -255,7 +256,7 @@ class CampaignDirector:
         if self._manager is not None:
             self._manager.shutdown()
         # Clean tmp files
-        self._clean_tmp_files()
+        self._clean_tmp_files(True)
 
     def _signal_handler(self, signum, frame):
         # Handle termination signals and force shutdown
@@ -297,7 +298,7 @@ class CampaignDirector:
                 try:
                     # Wait for single simulation completion
                     res = {
-                        "defect_id" : defect_id,
+                        "target" : defect_id,
                         "timeout_limit_exceeded" : False,
                         "simulation_result" : result.get(timeout)
                     }
@@ -309,7 +310,7 @@ class CampaignDirector:
                             with open(tmp_log, "r", encoding="utf-8", errors="ignore") as f:
                                 sim_content = f.read()
                                 res = {
-                                    "defect_id" : defect_id,
+                                    "target" : defect_id,
                                     "timeout_limit_exceeded" : True,
                                     "simulation_result" : sim_content
                                 }
@@ -330,7 +331,7 @@ class CampaignDirector:
             if self._dashboard_app:
                 self._dashboard_app.call_from_thread(self._dashboard_app.exit)
 
-    def run_campaign(self, timeout, dialect):
+    def run_campaign(self, timeout : int, dialect : str):
         print("[CampaignDirector::run_campaign] Running campaign...")
         report = []
         errors = []
@@ -375,11 +376,99 @@ class CampaignDirector:
 
         if errors:
             print(f"[CampaignDirector::run_campaign] An error occurred during campaign: {errors[0]}")
-            self._clean_tmp_files()
+            self._clean_tmp_files(True)
             raise errors[0]
 
         print("[CampaignDirector::run_campaign] Campaign completed\n")
 
-        self._clean_tmp_files()
+        self._clean_tmp_files(True)
 
         return report
+
+
+    # Execute a golden simulation to extract data from the defect-free netlist
+    def run_golden_simulation(self, circuit : edacurry.Circuit, timeout : int, dialect : str):
+
+        print("[CampaignDirector::run_golden_simulation] Running golden simulation...")
+
+        working_path = Path(self._entry_point_filename).parent.resolve()
+        os.chdir(working_path)
+
+        ngspice_netlist, warnings = edacurry.write_ngspice(circuit)
+        if not ngspice_netlist:
+            raise Exception("[CampaignDirector::run_golden_simulation] Unable to generate defected ngspice compatible netlist")
+
+        if warnings:
+            print("[CampaignDirector::run_golden_simulation] Warnings from EDACurry ngspice backend:\n")
+            for warning in warnings:
+                print(warning)
+            print("\n")
+
+        circuit_path = self._circuit_path
+        circuit_name = circuit_path.split("/")[-1].split(".")[0]
+        circuit_path = circuit_path.replace(circuit_name, f"@golden_simulation_{circuit_name}")
+        try:
+            with open(circuit_path, "w") as f:
+                f.write(ngspice_netlist)
+        except Exception as e:
+            raise Exception(f"[CampaignDirector::run_golden_simulation] Unable to write the entry point for the golden simulation: {e}\n")
+
+        entry_point_content = None
+        try:
+            with open(self._entry_point_filename, "r") as file:
+                entry_point_content = file.readlines()
+        except Exception as e:
+            raise Exception(f"[CampaignDirector::run_golden_simulation] Unable to read {self._entry_point_filename}: {e}")
+        if not entry_point_content:
+            raise Exception(f"[CampaignDirector::run_golden_simulation] Unable to access entry point file content")
+
+        index = 0
+        while index < len(entry_point_content):
+            line = "".join(entry_point_content[index].split())
+            if f'.include"{self._raw_circuit_filename}"' in line or f'.inc"{self._raw_circuit_filename}"' in line:
+                line = f'.include "{circuit_path}"'
+                entry_point_content[index] = line
+                break
+            index += 1
+
+        entry_point = self._entry_point_filename
+        raw_ep_filename = entry_point.split("/")[-1].split(".")[0]
+        entry_point = entry_point.replace(raw_ep_filename, f"@golden_simulation_{raw_ep_filename}")
+        try:
+            with open(entry_point, "w") as file:
+                file.writelines(entry_point_content)
+        except Exception as e:
+            raise Exception(f"[CampaignDirector::run_golden_simulation] Unable write the new entry point for the golden simulation: {e}")
+
+        tmp_log_file = Path(self._tmp_log_dir) / "golden_simulation_log.txt"
+        simulator = SimulatorEngine(self._ngspice_path, tmp_log_file, timeout)
+
+        res = None
+
+        try:
+            gs_report = simulator.simulate(entry_point, dialect)
+            res = {
+                "target" : "golden simulation",
+                "timeout_limit_exceeded": False,
+                "simulation_result" : gs_report
+            }
+
+        except BaseException as e:
+            print(f"[CampaignDirector::run_golden_simulation] Simulation halted: {e}")
+            golden_log_file = Path(self._tmp_log_dir) / "golden_simulation_log.txt"
+            if golden_log_file.exists():
+                golden_log_content = None
+                with open(golden_log_file, "r") as file:
+                    golden_log_content = file.read()
+                if golden_log_content is None:
+                    raise Exception(f"[CampaignDirector::run_golden_simulation] FATAL ERROR: {golden_log_file} is empty\n")
+                    res = {
+                        "target": "golden simulation",
+                        "timeout_limit_exceeded": True,
+                        "simulation_result": golden_log_content
+                    }
+            else:
+                raise Exception(f"[CampaignDirector::run_golden_simulation] FATAL ERROR: Unable to find golden simulation log file: {golden_log_file}\n")
+
+        self._clean_tmp_files(False)
+        return res

@@ -63,7 +63,7 @@ if __name__ == '__main__':
     # Retrieving timeout
     timeout = None
     try:
-        timeout = float(args.timeout)
+        timeout = int(args.timeout)
     except Exception as e:
         raise Exception(f"[EDACURRY2427] Unable to parse timeout value: {e}")
     if timeout is None:
@@ -142,21 +142,22 @@ if __name__ == '__main__':
     print("[EDACURRY2427] Done\n\n")
     
     # Running simulation
-    print("[EDACURRY2427] Retrieving defect simulation report...")
     campaign_director = CampaignDirector(defect_universe, ngspice_path, circuit_filename, raw_circuit_filename, entry_point_filename, tmp_log_dir)
+    print("[EDACURRY2427] Running golden simulation on defect-free netlist...")
+    golden_report = campaign_director.run_golden_simulation(circuit, timeout, dialect)
+    print("[EDACURRY2427] Golden report retrieved\n")
+
+    print("[EDACURRY2427] Retrieving defect simulation report...")
     campaign_report = campaign_director.run_campaign(timeout, dialect)
     print("[EDACURRY2427] Report acquired\n")
 
-
-    print("\n\nTesting analyses reports - Debug only")
-    for report in campaign_report:
-        print(report, "\n")
 
 
     # Cleaning tmp_logs dir
     print("[EDACURRY2427] Cleaning up temporary logs directory...")
     try:
-        shutil.rmtree(tmp_log_dir)
+        if os.path.exists(tmp_log_dir):
+            shutil.rmtree(tmp_log_dir)
+            print("[EDACURRY2427] Done\n")
     except Exception as e:
         print(f"[EDACURRY2427] Unable to remove temporary logs directory: {e}\n")
-    print("[EDACURRY2427] Done\n")
