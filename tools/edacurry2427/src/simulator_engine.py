@@ -122,7 +122,6 @@ class SimulatorEngine:
             print(f"[SimulatorEngine::simulate] ERROR: Unable to write log file: {e}\n")
 
         finally:
-            #os._exit(1)
             os.kill(os.getpid(), signal.SIGTERM)
 
 
